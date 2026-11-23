@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { consistencyOf, openConsistency, type Repeat } from "../src/arena-viewer/consistency.ts";
+import { consistencyOf, openConsistency } from "../src/arena-viewer/consistency.ts";
+import type { Repeat } from "../src/arena-viewer/consistency.ts";
 
 const decision = (choice: string, block: string): Repeat => ({ choice, block });
 
@@ -39,10 +40,10 @@ const knowledgeFile = (): string => {
   const player = db.query(`insert into players values (?, 'A', 'steady', 'medium')`);
   const insert = db.query(`insert into decisions values (?, ?, 'A', ?, ?, ?)`);
 
-  for (const match of ["a1", "a2", "b1", "b2", "hidden"]) player.run(match);
+  for (const match of ["a1", "a2", "b1", "b2", "hidden"]) { player.run(match); }
 
   for (let position = 0; position < 30; position++) {
-    for (const [match, choice] of [["a1", "shoot"], ["a2", "shoot"], ["b1", "shoot"], ["b2", "drink"], ["hidden", "shoot"]] as const) insert.run(match, position, "agent", choice, `p${position}`);
+    for (const [match, choice] of [["a1", "shoot"], ["a2", "shoot"], ["b1", "shoot"], ["b2", "drink"], ["hidden", "shoot"]] as const) { insert.run(match, position, "agent", choice, `p${position}`); }
   }
 
   insert.run("a1", 99, "forced", "grab", "forced");

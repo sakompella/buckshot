@@ -17,7 +17,8 @@ const OLD = "abc123";
 const runners = new Set<ReturnType<typeof Bun.spawn>>();
 
 afterEach(async () => {
-  for (const child of runners) if (child.exitCode === null) child.kill("SIGTERM");
+  for (const child of runners) { if (child.exitCode === null) {child.kill("SIGTERM"); }}
+
   await Promise.all([...runners].map(async (child) => child.exited));
   runners.clear();
 });
@@ -61,7 +62,8 @@ const waitFor = async (file: string) => {
   const end = Date.now() + 10_000;
 
   while (!existsSync(file)) {
-    if (Date.now() >= end) throw new Error(`waiting for ${file}`);
+    if (Date.now() >= end) { throw new Error(`waiting for ${file}`); }
+
     await Bun.sleep(10);
   }
 };
@@ -76,7 +78,7 @@ test("SIGTERM stops the runner's child; restart resumes unfinished matches once 
   const { dir, checkout, schedule, run } = setup();
   const first = schedule[0];
 
-  if (first === undefined) throw new Error("empty schedule");
+  if (first === undefined) { throw new Error("empty schedule"); }
 
   writeFileSync(join(dir, first.name, "hold"), "");
   const child = run(["--code", `${OLD}=${checkout}`]);
@@ -93,11 +95,12 @@ test("SIGTERM stops the runner's child; restart resumes unfinished matches once 
     expect(await resumed.exited).toBe(0);
     expect(schedule.map(({ name }) => starts(dir, name))).toEqual([2, 1]);
 
-    for (const { name } of schedule) expect(readStatus(join(dir, name, "manifest.json")).status).toBe("finished");
+    for (const { name } of schedule) { expect(readStatus(join(dir, name, "manifest.json")).status).toBe("finished"); }
+
     expect(await run(["--code", `${OLD}=${checkout}`]).exited).toBe(0);
     expect(schedule.map(({ name }) => starts(dir, name))).toEqual([2, 1]);
   } finally {
-    if (child.exitCode === null) child.kill("SIGTERM");
+    if (child.exitCode === null) { child.kill("SIGTERM"); }
   }
 });
 

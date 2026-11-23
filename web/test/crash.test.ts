@@ -83,7 +83,7 @@ beforeAll(async () => {
         const dir = join(root, name);
         const crashed = await play(dir, point, occurrence === "last" ? lastDelivery : occurrence);
 
-        if (name === "half-written lines") for (const file of ["events.jsonl", "calls.jsonl"]) appendFileSync(join(dir, file), '{"t":"2026-');
+        if (name === "half-written lines") { for (const file of ["events.jsonl", "calls.jsonl"]) {appendFileSync(join(dir, file), '{"t":"2026-'); }}
 
         runs.set(name, { crashed, resumed: await play(dir, "none", 0) });
       }),

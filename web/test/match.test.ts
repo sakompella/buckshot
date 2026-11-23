@@ -4,8 +4,9 @@ import * as gs from "@hegeldev/hegel/generators";
 import { Option, Predicate, Result } from "effect";
 
 import { answerPrompt } from "../src/bend.ts";
-import { type GameEvent, type Seat, type SeatCount } from "../src/domain.ts";
-import { aiPrompt, aiStep, begin, type Controller, type Progress, promptsOf } from "../src/driver.ts";
+import type { GameEvent, Seat, SeatCount } from "../src/domain.ts";
+import { aiPrompt, aiStep, begin, promptsOf } from "../src/driver.ts";
+import type { Controller, Progress } from "../src/driver.ts";
 import { seedRng } from "../src/rng.ts";
 
 const MOVE_LIMIT = 5_000;
@@ -53,7 +54,7 @@ test("an answer for an earlier request point is rejected", () => {
   let progress = Result.getOrThrow(begin(2, false, 1, seedRng(1), MIXED, 1));
   const [first] = promptsOf(progress.game);
 
-  if (first === undefined) throw new Error("expected a prompt");
+  if (first === undefined) { throw new Error("expected a prompt"); }
 
   progress = Result.getOrThrow(aiStep(progress, first));
 
@@ -86,7 +87,7 @@ const takesOf = ({ events, learned }: Progress): ReadonlyArray<Take> =>
 const indexFrom = (events: ReadonlyArray<GameEvent>, from: number, matches: Predicate.Predicate<GameEvent>): number => {
   const found = events.slice(from).findIndex(matches);
 
-  if (found < 0) throw new Error("expected a later event");
+  if (found < 0) { throw new Error("expected a later event"); }
 
   return from + found;
 };
@@ -98,11 +99,11 @@ const isTurnStart = (event: GameEvent): event is Extract<GameEvent, { readonly _
 const firstShooterAt = (events: ReadonlyArray<GameEvent>, began: number): Seat => {
   const mark = events.slice(0, began).findLast(Predicate.or(Predicate.isTagged("RoundBegan"), Predicate.isTagged("Loaded")));
 
-  if (mark !== undefined && Predicate.isTagged(mark, "RoundBegan")) return mark.first;
+  if (mark !== undefined && Predicate.isTagged(mark, "RoundBegan")) { return mark.first; }
 
   const turn = events.slice(indexFrom(events, began, Predicate.isTagged("Loaded"))).find(isTurnStart);
 
-  if (turn === undefined) throw new Error("expected a turn after the reload");
+  if (turn === undefined) { throw new Error("expected a turn after the reload"); }
 
   return turn.seat;
 };
@@ -111,7 +112,7 @@ const distributionsOf = (progress: Progress): ReadonlyArray<Distribution> => {
   const takes = takesOf(progress);
 
   return progress.events.flatMap((event, began): ReadonlyArray<Distribution> => {
-    if (!Predicate.isTagged(event, "GrabbingBegan")) return [];
+    if (!Predicate.isTagged(event, "GrabbingBegan")) { return []; }
 
     const done = indexFrom(progress.events, began, Predicate.isTagged("DistributionDone"));
 
@@ -128,7 +129,7 @@ const roundRobin = ({ first, takers }: Distribution): ReadonlyArray<Seat> => {
   for (let taken = 0; taken < takers.length; taken++) {
     const next = [1, 2, 3, 4].map((step) => SOCKETS[(previous + step) % SOCKETS.length]).find((seat) => seat !== undefined && (remaining.get(seat) ?? 0) > 0);
 
-    if (next === undefined) throw new Error("expected a seat that still takes");
+    if (next === undefined) { throw new Error("expected a seat that still takes"); }
 
     remaining.set(next, (remaining.get(next) ?? 0) - 1);
     order.push(next);
@@ -147,7 +148,7 @@ test("bots take their items one seat at a time from the seat after the first sho
       expect(distribution.takers).toEqual(roundRobin(distribution));
       distributions++;
 
-      if (new Set(distribution.takers).size > 1) shared++;
+      if (new Set(distribution.takers).size > 1) { shared++; }
     }
   }, { testCases: 20, derandomize: true });
 

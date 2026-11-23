@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 
-import { Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 
 import { openArena } from "../src/arena-viewer/load.ts";
 import { fittedRatings, gamesOfSeats } from "../src/arena-viewer/page/ratings.ts";
@@ -15,9 +15,11 @@ const options = { luck: { type: "string" }, a: { type: "string" }, b: { type: "s
 const { values, positionals } = parseArgs({ allowPositionals: true, options });
 const [dbPath] = positionals;
 
-if (dbPath === undefined || values.luck === undefined || values.a === undefined || values.b === undefined) throw new Error("usage: bun scripts/arena-gap.ts <db> --luck <luck db> --a <model|effort> --b <model|effort>");
+if (dbPath === undefined || values.luck === undefined || values.a === undefined || values.b === undefined) { throw new Error("usage: bun scripts/arena-gap.ts <db> --luck <luck db> --a <model|effort> --b <model|effort>"); }
 
 const { a, b } = values;
+
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const program = openArena(dbPath, { luck: values.luck }).pipe(
   Effect.map((arena) => {
@@ -36,7 +38,8 @@ const program = openArena(dbPath, { luck: values.luck }).pipe(
     return { a, b, ratingA: point.get(a), ratingB: point.get(b), gap: (point.get(a) ?? Number.NaN) - (point.get(b) ?? Number.NaN), se, matchesBetween: between.length, roundsBetween: rounds };
   }),
   Effect.scoped,
-  Effect.tap((result) => Effect.sync(() => { console.log(JSON.stringify(result)); })),
+  Effect.flatMap(encodeJson),
+  Effect.flatMap(Console.log),
   Effect.asVoid,
 );
 

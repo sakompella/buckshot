@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { consistencyOf } from "../scripts/arena-regret-consistency.ts";
-import { MISMATCHES, mismatchesOf, type MoveRow, openRegret } from "../src/arena-viewer/regret.ts";
+import { MISMATCHES, mismatchesOf, openRegret } from "../src/arena-viewer/regret.ts";
+import type { MoveRow } from "../src/arena-viewer/regret.ts";
 
 const SCHEMA = `create table regret (
   match_id text, ordinal integer, player text, label text, evaluator text, max_depth integer, budget integer, reload text, samples integer,
@@ -128,15 +129,15 @@ test("a move shows its regret, whether it is exact and the scores in percentage 
   expect(regret.moves("other").size).toBe(0);
 });
 
-test("a file holding more than one run is refused, so evaluators, reload rules and sample counts never mix", () => {
-  const run = (other: Partial<Run>) => () => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 }, { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: other }]));
+const run = (other: Partial<Run>) => () => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 }, { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: other }]));
 
-  for (const other of [{ evaluator: "v2" }, { depth: 3 }, { reload: "sampled", samples: 256 }]) expect(run(other)).toThrow("regret runs, not one");
+test("a file holding more than one run is refused, so evaluators, reload rules and sample counts never mix", () => {
+  for (const other of [{ evaluator: "v2" }, { depth: 3 }, { reload: "sampled", samples: 256 }]) { expect(run(other)).toThrow("regret runs, not one"); }
 });
 
-test("a stored row whose values do not decode or do not agree with its scores fails the match", () => {
-  const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
+const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
 
+test("a stored row whose values do not decode or do not agree with its scores fails the match", () => {
   expect(() => broken({ values: "not json" }).moves("m1")).toThrow();
   expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 700_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow("best score is not the top value");
 });
@@ -178,9 +179,10 @@ test("each kind of damage to a consistent row shows as its own mismatch", () => 
   });
 });
 
+const stored = (row: MoveRow) => ({ ...row, values: JSON.stringify(row.values) });
+
 test("the consistency check counts every row, the rows that do not decode and each mismatch", () => {
   const random = randomOf(5);
-  const stored = (row: MoveRow) => ({ ...row, values: JSON.stringify(row.values) });
   const rows = Array.from({ length: 20 }, (_row, ordinal) => consistentRow(random, ordinal));
 
   const undertop = (rows[3]?.bestScore ?? 0) === 0 ? 1 : (rows[3]?.bestScore ?? 0) - 1;

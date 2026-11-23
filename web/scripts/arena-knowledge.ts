@@ -6,29 +6,17 @@ import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 import { Option, Result, Schema } from "effect";
 
-import { type AgentSource } from "../src/agent/view.ts";
-import {
-  certainAt,
-  emptyLedger,
-  itemMoveOf,
-  type Knowledge,
-  knowledgeOf,
-  knownText,
-  type Ledger,
-  ledgerMismatch,
-  ledgerStep,
-  loadLog,
-  positionKeys,
-  relativeText,
-  shotOf,
-  stolenClue,
-} from "../src/analysis/knowledge.ts";
+import type { AgentSource } from "../src/agent/view.ts";
+import { certainAt, emptyLedger, itemMoveOf, knowledgeOf, knownText, ledgerMismatch, ledgerStep, loadLog, positionKeys, relativeText, shotOf, stolenClue } from "../src/analysis/knowledge.ts";
+import type { Knowledge, Ledger } from "../src/analysis/knowledge.ts";
 import { loadPlayer } from "../src/analysis/player.ts";
 import { shortName } from "../src/arena-viewer/page/data.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
-import { GameEvent, type Seat, Secret } from "../src/domain.ts";
-import { type Letter, rosterOf } from "../src/players.ts";
+import { GameEvent, Secret } from "../src/domain.ts";
+import type { Seat } from "../src/domain.ts";
+import { rosterOf } from "../src/players.ts";
+import type { Letter } from "../src/players.ts";
 import { eventText, secretText } from "../src/text.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
@@ -190,14 +178,14 @@ for (const [count, match] of matches.entries()) {
     problemCount++;
     put("problems", { match_id: match.id, ordinal, message });
 
-    if (out === undefined) console.error(`${match.name} #${ordinal}: ${message}`);
+    if (out === undefined) { console.error(`${match.name} #${ordinal}: ${message}`); }
   };
 
   const ownBetween = (player: string, after: number, before: number): number => (agentOrdinals.get(player) ?? []).filter((ordinal) => ordinal > after && ordinal < before).length;
 
   put("matches", { match_id: match.id, name: match.name, tournament: match.tournament, kind: kindOf(seats), status: match.status, disposition: match.disposition, code_hash: match.code_hash, instructions_hash: match.instructions_hash, seed: match.seed, seed_block_id: match.seed_block_id, pairing: match.pairing });
 
-  for (const seat of seats) put("players", { match_id: match.id, player: seat.player, position: seat.position, entrant: seat.entrant, model: seat.model, effort: seat.effort });
+  for (const seat of seats) { put("players", { match_id: match.id, player: seat.player, position: seat.position, entrant: seat.entrant, model: seat.model, effort: seat.effort }); }
 
   out?.run("BEGIN");
 
@@ -211,7 +199,7 @@ for (const [count, match] of matches.entries()) {
       const log = loadLog(before.events, before.learned, seat);
       const knowledge: Knowledge = knowledgeOf(belief, log);
       const board = before.game.board;
-      const legal = Schema.decodeSync(Schema.fromJsonString(Schema.Array(Schema.Struct({ move: Schema.Number, label: Schema.String }))))(decision.legal_json).map(({ label }) => label);
+      const legal = Schema.decodeSync(Schema.fromJsonString(Schema.Array(Schema.Struct({ move: Schema.Finite, label: Schema.String }))))(decision.legal_json).map(({ label }) => label);
       const keys = positionKeys(roster, seat, board, log, { public: belief.orders(log, false), private: belief.orders(log, true) }, legal, [match.code_hash, match.instructions_hash]);
       const clueOrdinal = Option.map(knowledge.clue, (index) => learnedOrdinal[index] ?? -1);
       const viaAdrenaline = Option.map(knowledge.clue, (index) => stolenClue(before.events, before.learned[index]?.at ?? 0, seat));
@@ -270,7 +258,7 @@ for (const [count, match] of matches.entries()) {
           console.error(`${match.name} #${decision.ordinal}: the true gun ${gun} is outside the allowed orders`);
         }
 
-        if (Option.isSome(knowledge.chamber) && Option.getOrNull(certainAt(knowledge.private, 0)) !== (gun.startsWith("L") ? "Live" : "Blank")) wrongCertain++;
+        if (Option.isSome(knowledge.chamber) && Option.getOrNull(certainAt(knowledge.private, 0)) !== (gun.startsWith("L") ? "Live" : "Blank")) { wrongCertain++; }
       }
 
       if (args.trace !== undefined) {
@@ -293,19 +281,19 @@ for (const [count, match] of matches.entries()) {
     moves.push(decodeMove(decision.raw));
     replay = Result.getOrThrow(replayOf(Option.some(replay), manifest, moves));
 
-    if (Option.isSome(replay.divergence)) throw new Error(`${match.name}: ${Option.getOrThrow(replay.divergence)}`);
+    if (Option.isSome(replay.divergence)) { throw new Error(`${match.name}: ${Option.getOrThrow(replay.divergence)}`); }
 
     const after = current();
 
     for (let index = before.events.length; index < after.events.length; index++) {
       const event = after.events[index];
 
-      if (event === undefined) continue;
+      if (event === undefined) { continue; }
 
       eventOrdinal[index] = decision.ordinal;
       const deaths = GameEvent.matchOrElse(event, { Died: ({ seat: died }) => [died] }, () => []);
 
-      for (const died of deaths) put("deaths", { match_id: match.id, player: letterOf(died), ordinal: decision.ordinal, round: after.game.board.round.index, items_held: ledger.open.filter((holding) => holding.seat === died).length });
+      for (const died of deaths) { put("deaths", { match_id: match.id, player: letterOf(died), ordinal: decision.ordinal, round: after.game.board.round.index, items_held: ledger.open.filter((holding) => holding.seat === died).length }); }
 
       ledger = ledgerStep(ledger, event, index);
     }
@@ -314,7 +302,7 @@ for (const [count, match] of matches.entries()) {
       learnedOrdinal[index] = decision.ordinal;
       const note = after.learned[index];
 
-      if (note === undefined) continue;
+      if (note === undefined) { continue; }
 
       const clue = (kind: string, position: number, shell: string) => {
         put("clues", { match_id: match.id, learned: index, ordinal: decision.ordinal, player: letterOf(note.seat), kind, position, shell, via_adrenaline: stolenClue(after.events, note.at, note.seat) ? 1 : 0 });
@@ -324,9 +312,9 @@ for (const [count, match] of matches.entries()) {
     }
   }
 
-  if (match.status === "completed" && ledger.open.length > 0) problem(-1, `${ledger.open.length} items still open at the end of a completed match`);
+  if (match.status === "completed" && ledger.open.length > 0) { problem(-1, `${ledger.open.length} items still open at the end of a completed match`); }
 
-  for (const message of ledger.problems) problem(-1, message);
+  for (const message of ledger.problems) { problem(-1, message); }
 
   const roundOf = (eventIndex: number): number => current().events.slice(0, eventIndex + 1).filter(GameEvent.guards.RoundBegan).length - 1;
 
@@ -340,7 +328,7 @@ for (const [count, match] of matches.entries()) {
 
   out?.run("COMMIT");
 
-  if (out !== undefined && (count + 1) % 50 === 0) console.error(`${count + 1}/${matches.length} matches, ${Math.round((performance.now() - started) / 1000)} s`);
+  if (out !== undefined && (count + 1) % 50 === 0) { console.error(`${count + 1}/${matches.length} matches, ${Math.round((performance.now() - started) / 1000)} s`); }
 }
 
 interface ShellCons {
@@ -363,7 +351,7 @@ function trueGun(at: AgentSource): string {
   const state = decodeGunState(at.game.state);
   const shells: Array<string> = [];
 
-  for (let rest = state.world.gun; rest.$ === "Con"; rest = rest.tail) shells.push(rest.head.$ === "Live" ? "L" : "B");
+  for (let rest = state.world.gun; rest.$ === "Con"; rest = rest.tail) { shells.push(rest.head.$ === "Live" ? "L" : "B"); }
 
   return shells.join("");
 }

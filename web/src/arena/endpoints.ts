@@ -1,4 +1,5 @@
-import { type Api, clampThinkingLevel, createProvider, type Model, type ModelThinkingLevel, type Provider, type ProviderStreams } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, createProvider } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelThinkingLevel, Provider, ProviderStreams } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { DEFAULT_THINKING_BUDGETS } from "@earendil-works/pi-ai/api/simple-options";
@@ -6,7 +7,7 @@ import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/pro
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type { ModelRef } from "@earendil-works/pi-durable";
-import { Config, Data, Effect, Option, Redacted, Schema } from "effect";
+import { Config, Effect, Option, Redacted, Schema } from "effect";
 
 import type { AgentId } from "./agent.ts";
 import { configLabel } from "./model-names.ts";
@@ -58,7 +59,7 @@ export const Endpoint = Schema.TaggedUnion({
 
 export type Endpoint = typeof Endpoint.Type;
 
-export class EndpointConfigError extends Data.TaggedError("EndpointConfigError")<{ readonly message: string }> {}
+export class EndpointConfigError extends Schema.TaggedError<EndpointConfigError>()("EndpointConfigError", { message: Schema.String }) {}
 
 interface Credentials {
   readonly url: URL;
@@ -68,11 +69,11 @@ interface Credentials {
 /** A URL and its key, both or neither; one without the other is an error that names the missing variable. */
 const credentials = (urlName: string, keyName: string) =>
   Config.all({ url: Config.option(Config.URL(urlName)), key: Config.option(Config.Redacted(keyName)) }).pipe(
-    Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
+    Effect.mapError((error) => EndpointConfigError.make({ message: error.message })),
     Effect.flatMap(({ url, key }): Effect.Effect<Option.Option<Credentials>, EndpointConfigError> => {
-      if (Option.isSome(url) && Option.isNone(key)) return Effect.fail(new EndpointConfigError({ message: `${keyName} must be set when ${urlName} is` }));
+      if (Option.isSome(url) && Option.isNone(key)) { return Effect.fail(EndpointConfigError.make({ message: `${keyName} must be set when ${urlName} is` })); }
 
-      if (Option.isNone(url) && Option.isSome(key)) return Effect.fail(new EndpointConfigError({ message: `${urlName} must be set when ${keyName} is` }));
+      if (Option.isNone(url) && Option.isSome(key)) { return Effect.fail(EndpointConfigError.make({ message: `${urlName} must be set when ${keyName} is` })); }
 
       return Effect.succeed(Option.zipWith(url, key, (givenUrl, givenKey) => ({ url: givenUrl, key: givenKey })));
     }),
@@ -91,7 +92,7 @@ const catalogModelOf = (endpoint: Endpoint): Model<Api> | undefined => {
   const [, providerName = "", id = ""] = /^([^/]+)\/(.+)$/.exec(endpoint.catalogModel ?? "") ?? [];
   const provider = builtinProvider(providerName);
 
-  if (provider !== undefined) return getBuiltinModels(provider).find((model) => model.id === id);
+  if (provider !== undefined) { return getBuiltinModels(provider).find((model) => model.id === id); }
 
   return ownCatalogOf(endpoint).find((model) => model.id === (endpoint.catalogModel ?? endpoint.model));
 };
@@ -100,38 +101,39 @@ const catalogModelOf = (endpoint: Endpoint): Model<Api> | undefined => {
 const listedModelOf = (endpoint: Endpoint): Model<Api> => {
   const model = catalogModelOf(endpoint);
 
-  if (model === undefined) throw new Error(`${endpoint.catalogModel ?? endpoint.model} left pi-ai's catalog after it was parsed`);
+  if (model === undefined) { throw new Error(`${endpoint.catalogModel ?? endpoint.model} left pi-ai's catalog after it was parsed`); }
 
   return model;
 };
 
+const variableOf = (agent: AgentId, suffix: string) => `PLAYER_${agent}_${suffix}`;
+
 /** One agent's endpoint. Its model, or the catalog model it names, must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
 export const agentEndpoint = (agent: AgentId) =>
   Effect.gen(function* () {
-    const name = (suffix: string) => `PLAYER_${agent}_${suffix}`;
-    const anthropic = yield* credentials(name("ANT_URL"), name("ANT_KEY"));
-    const openai = yield* credentials(name("OAI_URL"), name("OAI_KEY"));
+    const anthropic = yield* credentials(variableOf(agent, "ANT_URL"), variableOf(agent, "ANT_KEY"));
+    const openai = yield* credentials(variableOf(agent, "OAI_URL"), variableOf(agent, "OAI_KEY"));
 
     const settings = yield* Config.all({
-      model: Config.option(Config.NonEmptyString(name("MODEL"))),
-      catalogModel: Config.option(Config.NonEmptyString(name("CATALOG_MODEL"))),
-      effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
-      accountId: Config.option(Config.NonEmptyString(name("ACCOUNT_ID"))),
+      model: Config.option(Config.NonEmptyString(variableOf(agent, "MODEL"))),
+      catalogModel: Config.option(Config.NonEmptyString(variableOf(agent, "CATALOG_MODEL"))),
+      effort: Config.option(Config.Literals(THINKING_LEVELS, variableOf(agent, "EFFORT"))),
+      accountId: Config.option(Config.NonEmptyString(variableOf(agent, "ACCOUNT_ID"))),
       accountHeader: Config.option(Config.NonEmptyString("ARENA_ACCOUNT_HEADER")),
       agentHeader: Config.option(Config.NonEmptyString("ARENA_AGENT_HEADER")),
       projectHeader: Config.option(Config.NonEmptyString("ARENA_PROJECT_HEADER")),
       project: Config.option(Config.NonEmptyString("ARENA_PROJECT")),
-      instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
-      effortLabel: Config.option(Config.NonEmptyString(name("EFFORT_LABEL"))),
+      instructionsAddendum: Config.option(Config.NonEmptyString(variableOf(agent, "INSTRUCTIONS_ADDENDUM"))),
+      effortLabel: Config.option(Config.NonEmptyString(variableOf(agent, "EFFORT_LABEL"))),
     }).pipe(
-      Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
+      Effect.mapError((error) => EndpointConfigError.make({ message: error.message })),
     );
 
-    if (Option.isSome(anthropic) && Option.isSome(openai)) return yield* new EndpointConfigError({ message: `Set ${name("ANT_URL")} or ${name("OAI_URL")}, not both` });
+    if (Option.isSome(anthropic) && Option.isSome(openai)) { return yield* EndpointConfigError.make({ message: `Set ${variableOf(agent, "ANT_URL")} or ${variableOf(agent, "OAI_URL")}, not both` }); }
 
-    if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
+    if (Option.isNone(settings.model)) { return yield* EndpointConfigError.make({ message: `${variableOf(agent, "MODEL")} must be set` }); }
 
-    if (Option.isSome(settings.accountId) && Option.isNone(settings.accountHeader)) return yield* new EndpointConfigError({ message: `ARENA_ACCOUNT_HEADER must be set when ${name("ACCOUNT_ID")} is` });
+    if (Option.isSome(settings.accountId) && Option.isNone(settings.accountHeader)) { return yield* EndpointConfigError.make({ message: `ARENA_ACCOUNT_HEADER must be set when ${variableOf(agent, "ACCOUNT_ID")} is` }); }
 
     const account = Option.getOrUndefined(Option.zipWith(settings.accountHeader, settings.accountId, (header, id) => ({ header, id })));
 
@@ -144,17 +146,17 @@ export const agentEndpoint = (agent: AgentId) =>
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
-        onNone: () => `${name("MODEL")}=${endpoint.model} is not a pi-ai ${endpoint._tag} model; for an endpoint's alias, set ${name("CATALOG_MODEL")} to the model it stands for`,
-        onSome: (catalogModel) => `${name("CATALOG_MODEL")}=${catalogModel} is not a pi-ai ${endpoint._tag} model, nor a model of the pi-ai provider named before a slash`,
+        onNone: () => `${variableOf(agent, "MODEL")}=${endpoint.model} is not a pi-ai ${endpoint._tag} model; for an endpoint's alias, set ${variableOf(agent, "CATALOG_MODEL")} to the model it stands for`,
+        onSome: (catalogModel) => `${variableOf(agent, "CATALOG_MODEL")}=${catalogModel} is not a pi-ai ${endpoint._tag} model, nor a model of the pi-ai provider named before a slash`,
       });
 
-    const inCatalog = (endpoint: Endpoint) => (catalogModelOf(endpoint) === undefined ? Effect.fail(new EndpointConfigError({ message: notListed(endpoint) })) : Effect.succeed(endpoint));
+    const inCatalog = (endpoint: Endpoint) => (catalogModelOf(endpoint) === undefined ? Effect.fail(EndpointConfigError.make({ message: notListed(endpoint) })) : Effect.succeed(endpoint));
 
-    if (Option.isSome(anthropic)) return yield* inCatalog(Endpoint.cases.Anthropic.make({ ...anthropic.value, ...fields }));
+    if (Option.isSome(anthropic)) { return yield* inCatalog(Endpoint.cases.Anthropic.make({ ...anthropic.value, ...fields })); }
 
-    if (Option.isSome(openai)) return yield* inCatalog(Endpoint.cases.OpenAIResponses.make({ ...openai.value, ...fields }));
+    if (Option.isSome(openai)) { return yield* inCatalog(Endpoint.cases.OpenAIResponses.make({ ...openai.value, ...fields })); }
 
-    return yield* new EndpointConfigError({ message: `Set ${name("ANT_URL")} and ${name("ANT_KEY")}, or ${name("OAI_URL")} and ${name("OAI_KEY")}` });
+    return yield* EndpointConfigError.make({ message: `Set ${variableOf(agent, "ANT_URL")} and ${variableOf(agent, "ANT_KEY")}, or ${variableOf(agent, "OAI_URL")} and ${variableOf(agent, "OAI_KEY")}` });
   });
 
 /** The base URL as the SDKs want it, without a trailing slash. */
@@ -297,7 +299,7 @@ const setsEffortPerMessage = (model: Model<Api>): boolean => model.compat !== un
 const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thinking"] => {
   const off = { mode: "off", effort: null, budget_tokens: null, summary: null } as const;
 
-  if (endpoint.effort === undefined || !model.reasoning) return { level: null, ...off };
+  if (endpoint.effort === undefined || !model.reasoning) { return { level: null, ...off }; }
 
   // pi-durable passes no reasoning option at effort off, so pi-ai does not clamp
   // it, and providerOf turns off the thinking pi-ai would still ask some Claude
@@ -312,7 +314,7 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
   const level = clampThinkingLevel(model, endpoint.effort);
   const effort = model.thinkingLevelMap?.[level] ?? level;
 
-  if (level === "off") return { level, ...off };
+  if (level === "off") { return { level, ...off }; }
 
   return Endpoint.match(endpoint, {
     Anthropic: (): AgentProvenance["thinking"] =>

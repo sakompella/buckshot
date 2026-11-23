@@ -3,15 +3,18 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, getSystemMessageText, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
+import { contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, getSystemMessageText } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, TranscriptContext } from "@earendil-works/pi-ai";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
-import { type AgentProvenance, agentEndpoint, provenanceOf, providerOf } from "../src/arena/endpoints.ts";
+import { agentEndpoint, provenanceOf, providerOf } from "../src/arena/endpoints.ts";
+import type { AgentProvenance } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
-import { DELIVERIES, type Delivery, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
+import { DELIVERIES, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
+import type { Delivery } from "../src/arena/match.ts";
 import { entriesSentTo } from "../src/arena/runlog.ts";
 import type { Controller } from "../src/driver.ts";
 import { fauxProvenance } from "./faux-run.ts";
@@ -38,9 +41,9 @@ const play = (text: string): AssistantMessage => {
 const decide = (transcript: TranscriptContext): AssistantMessage => {
   const last = transcript.messages.findLast((message) => message.role !== "system");
 
-  if (last === undefined || last.role === "assistant" || !(last.role === "toolResult" || textOf(last).startsWith("Your turn."))) return fauxAssistantMessage(fauxText("Done."));
+  if (last === undefined || last.role === "assistant" || !(last.role === "toolResult" || textOf(last).startsWith("Your turn."))) { return fauxAssistantMessage(fauxText("Done.")); }
 
-  if (last.role === "toolResult") return last.isError ? fauxAssistantMessage([fauxToolCall("get_game", { player: "A" })], { stopReason: "toolUse" }) : play(textOf(last));
+  if (last.role === "toolResult") { return last.isError ? fauxAssistantMessage([fauxToolCall("get_game", { player: "A" })], { stopReason: "toolUse" }) : play(textOf(last)); }
 
   const isFirst = transcript.messages.filter((message) => message.role === "user" && textOf(message).startsWith("Your turn.")).length === 1;
 
@@ -103,7 +106,7 @@ test("an agent's instructions addendum reaches its own system prompt only, and t
     const system = transcript.messages.find((message) => message.role === "system");
     const opening = transcript.messages.find((message) => message.role === "user" && textOf(message).startsWith("Your turn."));
 
-    if (system === undefined || opening === undefined) return;
+    if (system === undefined || opening === undefined) { return; }
 
     const { you } = parseView(textOf(opening).slice(textOf(opening).indexOf("{")));
 
@@ -147,7 +150,7 @@ test.each([
 test.each(["start:before-commit", "start:after-commit"])("the pin is recoverable from the manifest at %s", async (point) => {
   const dir = mkdtempSync(join(tmpdir(), "arena-start-pin-"));
 
-  await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a"), crashAt: (at) => { if (at === point) throw new Error("crash"); } }));
+  await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a"), crashAt: (at) => { if (at === point) { throw new Error("crash"); } } }));
 
   expect(pinOf(dir)).toBe("account-a");
 });
@@ -224,7 +227,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
   const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), delivery }));
   const [client] = clients;
 
-  if (client === undefined) throw new Error("the arena never connected its human");
+  if (client === undefined) { throw new Error("the arena never connected its human"); }
 
   expect(await client.exited).toBe(0);
   expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
@@ -265,7 +268,7 @@ test("rotating only a provider key preserves resume provenance, and no key ever 
     const before = await endpointFrom({ ...env, [`PLAYER_A_${api}_KEY`]: oldKey });
     const after = await endpointFrom({ ...env, [`PLAYER_A_${api}_KEY`]: newKey });
 
-    if (!Exit.isSuccess(before) || !Exit.isSuccess(after)) throw new Error("test endpoints failed");
+    if (!Exit.isSuccess(before) || !Exit.isSuccess(after)) { throw new Error("test endpoints failed"); }
 
     const provenance = provenanceOf("provider-A", before.value);
 
@@ -284,7 +287,7 @@ test.each([
   const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
   const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: ENDPOINT.url, [`PLAYER_A_${api}_KEY`]: ENDPOINT.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
 
-  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+  if (!Exit.isSuccess(endpoint)) { throw new Error(String(endpoint.cause)); }
 
   const provenance = provenanceOf("provider-A", endpoint.value);
 
@@ -314,7 +317,7 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
 
   const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: ENDPOINT.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort, ...extraEnv });
 
-  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+  if (!Exit.isSuccess(endpoint)) { throw new Error(String(endpoint.cause)); }
 
   const models = createModels();
   const providerId = api === "ANT" ? "anthropic-A" : "openai-responses-A";
@@ -323,9 +326,9 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
 
   const listed = models.getModel(providerId, model);
 
-  if (listed === undefined) throw new Error(`${model} is not listed`);
+  if (listed === undefined) { throw new Error(`${model} is not listed`); }
 
-  for (let reply = 0; reply < replies; reply++) await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? options : { ...options, reasoning: effort });
+  for (let reply = 0; reply < replies; reply++) { await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? options : { ...options, reasoning: effort }); }
 
   await server.stop(true);
 
@@ -354,7 +357,7 @@ test.each([
   const request = await firstRequestAt("ANT", model, "off");
   const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: ENDPOINT.url, PLAYER_A_ANT_KEY: ENDPOINT.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "off" });
 
-  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+  if (!Exit.isSuccess(endpoint)) { throw new Error(String(endpoint.cause)); }
 
   expect(request.thinking?.type).toBe(wire);
   expect([request.output_config, ...(request.messages ?? []).map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([]);
@@ -384,7 +387,7 @@ test("the account pin is recorded in the provenance only when set, never with th
   const pinned = await endpointFrom({ ...env, ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "codex-account-1.json" });
   const unpinned = await endpointFrom(env);
 
-  if (!Exit.isSuccess(pinned) || !Exit.isSuccess(unpinned)) throw new Error("test endpoints failed");
+  if (!Exit.isSuccess(pinned) || !Exit.isSuccess(unpinned)) { throw new Error("test endpoints failed"); }
 
   expect(provenanceOf("provider-A", pinned.value).account_id).toBe("codex-account-1.json");
   expect("account_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
@@ -396,7 +399,7 @@ test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into
   const withText = await endpointFrom({ ...env, PLAYER_A_INSTRUCTIONS_ADDENDUM: ADDENDUM });
   const without = await endpointFrom(env);
 
-  if (!Exit.isSuccess(withText) || !Exit.isSuccess(without)) throw new Error("test endpoints failed");
+  if (!Exit.isSuccess(withText) || !Exit.isSuccess(without)) { throw new Error("test endpoints failed"); }
 
   expect(provenanceOf("provider-A", withText.value).instructions_addendum).toBe(ADDENDUM);
   expect("instructions_addendum" in provenanceOf("provider-A", without.value)).toBe(false);
@@ -405,7 +408,7 @@ test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into
 test("an endpoint's model alias plays as the catalog model it names", async () => {
   const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${ENDPOINT.url}/v1`, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
 
-  if (!Exit.isSuccess(alias)) throw new Error(String(alias.cause));
+  if (!Exit.isSuccess(alias)) { throw new Error(String(alias.cause)); }
 
   const model = providerOf("openai-responses-A", alias.value).getModels()[0];
 
@@ -416,7 +419,7 @@ test("an endpoint's model alias plays as the catalog model it names", async () =
 test("an endpoint's model of another provider plays as a model of the pi-ai provider its catalog model names", async () => {
   const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:9440/v1", PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
 
-  if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
+  if (!Exit.isSuccess(routed)) { throw new Error(String(routed.cause)); }
 
   const model = providerOf("openai-responses-A", routed.value).getModels()[0];
 
@@ -459,12 +462,12 @@ test.each([
   expect([unnamed?.headers.get("X-Agent"), unnamed?.headers.get("X-Project")]).toEqual([null, null]);
 });
 
+const keyOf = async (sessionId: string) => {
+  const [request] = await requestsSentAt("OAI", "gpt-6-luna", "low", {}, 1, { sessionId });
+
+  return Schema.decodeUnknownSync(Schema.Struct({ prompt_cache_key: Schema.String }))(request?.body).prompt_cache_key;
+};
+
 test("an OpenAI Responses endpoint sends a prompt cache key that is the conversation's session id, and a session id of its own for each conversation", async () => {
-  const keyOf = async (sessionId: string) => {
-    const [request] = await requestsSentAt("OAI", "gpt-6-luna", "low", {}, 1, { sessionId });
-
-    return Schema.decodeUnknownSync(Schema.Struct({ prompt_cache_key: Schema.String }))(request?.body).prompt_cache_key;
-  };
-
   expect([await keyOf("seat-A"), await keyOf("seat-B")]).toEqual(["seat-A", "seat-B"]);
 });

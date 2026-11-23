@@ -30,7 +30,7 @@ const consistencyLineView = (h: H, consistency: Lazy["consistency"], key: string
     onEmpty: () => h.empty,
     onFailure: (error) => lineView(h, "Same position, same move", [h.span([h.Class("dv")], [`Could not load the consistency: ${error}`])]),
     onData: (rows) => {
-      if (rows.length === 0) return h.empty;
+      if (rows.length === 0) { return h.empty; }
 
       const row = rows.find((candidate) => keyOf(candidate) === key);
 

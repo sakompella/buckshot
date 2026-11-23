@@ -5,7 +5,7 @@ import { readOnly } from "./read-only.ts";
 // The luck database of tools/arena/analysis/aivat.py: per match and player, the sum of the AIVAT corrections at the
 // chance events of the match's rounds, in round wins. Keyed by "<match id>|<player>".
 
-const LuckRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, correction: Schema.Number });
+const LuckRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, correction: Schema.Finite });
 
 const decodeLuckRow = Schema.decodeUnknownSync(LuckRow);
 

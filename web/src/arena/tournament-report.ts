@@ -1,29 +1,14 @@
 import { Result } from "effect";
 
-import { type PriceTable, type Total, totalsBy } from "./cost.ts";
-import { callsOf, faultsOf, finishedNames, readMatch, type TournamentFile } from "./tournament-dir.ts";
+import { totalsBy } from "./cost.ts";
+import type { PriceTable, Total } from "./cost.ts";
+import { callsOf, faultsOf, finishedNames, readMatch } from "./tournament-dir.ts";
+import type { TournamentFile } from "./tournament-dir.ts";
 import { BOOTSTRAP_DRAWS } from "./bootstrap.ts";
-import {
-  type CodeVersion,
-  codeVersions,
-  fitRatings,
-  headToHead,
-  intervalsOf,
-  type Interval,
-  type Interventions,
-  interventionsByEntrant,
-  type PlayedMatch,
-  type PositionShare,
-  resamples,
-  type Share,
-  sharesByEntrant,
-  sharesByPosition,
-  sharesByVersion,
-  type StarterRate,
-  starterRates,
-  type VersionShare,
-} from "./tournament-stats.ts";
-import { botEntrant, type Tournament } from "./tournament.ts";
+import { codeVersions, fitRatings, headToHead, intervalsOf, interventionsByEntrant, resamples, sharesByEntrant, sharesByPosition, sharesByVersion, starterRates } from "./tournament-stats.ts";
+import type { CodeVersion, Interval, Interventions, PlayedMatch, PositionShare, Share, StarterRate, VersionShare } from "./tournament-stats.ts";
+import { botEntrant } from "./tournament.ts";
+import type { Tournament } from "./tournament.ts";
 
 // The tournament's report: the stats of its finished matches that agree with
 // the schedule, as plain data. scripts/arena-stats.ts prints it.

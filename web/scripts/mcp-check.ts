@@ -12,7 +12,7 @@ const RAW_SEAT = /seat|Player \d/i;
 
 const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  turn: Schema.optionalKey(Schema.Number),
+  turn: Schema.optionalKey(Schema.Finite),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))),
 });
@@ -40,7 +40,7 @@ const replySizes: Array<number> = [];
 const callTool = async (name: string, input: Readonly<Record<string, number | string | boolean | ReadonlyArray<string>>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
   const { content, isError } = parseToolText(await client.callTool({ name, arguments: input }));
 
-  if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a numbered player: ${content[0].text}`);
+  if (RAW_SEAT.test(content[0].text)) { throw new Error(`${name} reply names a seat or a numbered player: ${content[0].text}`); }
 
   replySizes.push(content[0].text.length);
 
@@ -50,9 +50,9 @@ const callTool = async (name: string, input: Readonly<Record<string, number | st
 const getView = async (player: string) => {
   const got = await callTool("get_game", { player });
 
-  if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
+  if (!got.ok) { throw new Error(`get_game(${player}) failed: ${got.text}`); }
 
-  if ((await callTool("get_game", { player })).text !== got.text) throw new Error(`a repeated get_game(${player}) differs`);
+  if ((await callTool("get_game", { player })).text !== got.text) { throw new Error(`a repeated get_game(${player}) differs`); }
 
   return { text: got.text, view: parseView(got.text) };
 };
@@ -101,40 +101,40 @@ let sample = "";
 for (; calls < CALL_LIMIT; calls++) {
   const views = await Promise.all(agents.map(async (player) => ({ player, ...(await getView(player)) })));
 
-  if (views.some(({ view }) => view.status === "over")) break;
+  if (views.some(({ view }) => view.status === "over")) { break; }
 
   const ready = views.filter(({ view }) => view.status === "your turn");
   const mover = ready[moves % ready.length];
 
   // The DoN player moves inside the server before any reply, so an Agent always has the turn.
-  if (mover === undefined) throw new Error("no Agent player has the turn, but the match is not over");
+  if (mover === undefined) { throw new Error("no Agent player has the turn, but the match is not over"); }
 
   const { turn, events, moves: legal = [] } = mover.view;
 
-  if (turn === undefined) throw new Error("an agent with the turn has no turn number");
+  if (turn === undefined) { throw new Error("an agent with the turn has no turn number"); }
 
-  if (!heard.has(mover.player) && events?.[0]?.startsWith("Round 1 begins") !== true) throw new Error(`the first view of player ${mover.player} does not start at the match start: ${JSON.stringify(events)}`);
+  if (!heard.has(mover.player) && events?.[0]?.startsWith("Round 1 begins") !== true) { throw new Error(`the first view of player ${mover.player} does not start at the match start: ${JSON.stringify(events)}`); }
 
-  if (moves === 0) console.log("out-of-range move:", await callTool("play_move", { player: mover.player, move: legal.length, turn }));
+  if (moves === 0) { console.log("out-of-range move:", await callTool("play_move", { player: mover.player, move: legal.length, turn })); }
 
-  if (sample === "" && legal.some(({ label }) => label.startsWith("Use"))) sample = mover.text;
+  if (sample === "" && legal.some(({ label }) => label.startsWith("Use"))) { sample = mover.text; }
 
   longestEvents = Math.max(longestEvents, events?.length ?? 0);
   sharedTurns += ready.length > 1 ? 1 : 0;
   hear(mover.player, events);
 
-  if (legal.length === 0) throw new Error("agent turn with no legal moves");
+  if (legal.length === 0) { throw new Error("agent turn with no legal moves"); }
 
   const move = (moves * 5 + 1) % legal.length;
   const played = await callTool("play_move", { player: mover.player, move, turn });
 
-  if (!played.ok) throw new Error(`play_move refused: ${played.text}`);
+  if (!played.ok) { throw new Error(`play_move refused: ${played.text}`); }
 
   const repeated = await callTool("play_move", { player: mover.player, move, turn });
 
-  if (repeated.ok) throw new Error(`a repeated play_move was played twice: ${repeated.text}`);
+  if (repeated.ok) { throw new Error(`a repeated play_move was played twice: ${repeated.text}`); }
 
-  if (moves === 0) console.log("repeated move:", repeated.text);
+  if (moves === 0) { console.log("repeated move:", repeated.text); }
 
   lastTurn = turn;
   moves += 1;
@@ -168,4 +168,4 @@ console.log(`reply characters: median ${bySize[Math.floor(bySize.length / 2)]}, 
 
 await client.close();
 
-if (replaced.ok || !isOver || !isTailHeard || !isEachLineOnce || !rematch.ok || stale.ok) process.exit(1);
+if (replaced.ok || !isOver || !isTailHeard || !isEachLineOnce || !rematch.ok || stale.ok) { process.exit(1); }

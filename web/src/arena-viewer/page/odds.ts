@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { type ConfigOdds, ODDS_BINS, type ShotTally } from "../aggregates.ts";
+import { ODDS_BINS } from "../aggregates.ts";
+import type { ConfigOdds, ShotTally } from "../aggregates.ts";
 import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, byEffort, colorOf, dashOf, effortLabel, groupBy, labelOf, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";

@@ -1,20 +1,24 @@
 import { Option } from "effect";
 import { AsyncData } from "foldkit";
-import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
+import { createLazy } from "foldkit/html";
+import type { Document, Html, HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import { effortParts } from "../../arena/same-treatment.ts";
 import { aboutView, footerView, howView, summaryView } from "./about.ts";
 import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
-import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
-import { allMatchesOf, type Derived, derive, keptMatchesOf, memoLast } from "./derived.ts";
+import { certainTableView, certainView } from "./certain.ts";
+import type { CertainLinks } from "./certain.ts";
+import { allMatchesOf, derive, keptMatchesOf, memoLast } from "./derived.ts";
+import type { Derived } from "./derived.ts";
 import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { accuracyTableView, configPanelView, leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
-import { type Group, GROUPS, LoadFailure, type Local, Message, type Model, type Section, type Viewport } from "./model.ts";
+import { GROUPS, LoadFailure, Message } from "./model.ts";
+import type { Group, Local, Model, Section, Viewport } from "./model.ts";
 import { scatterView } from "./scatter.ts";
 import { tourView } from "./tour.ts";
 
@@ -42,9 +46,9 @@ const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: 
   const on = every.filter((value) => !off.includes(value));
   const offShown = every.filter((value) => off.includes(value));
 
-  if (offShown.length === 0) return `all ${noun}`;
+  if (offShown.length === 0) { return `all ${noun}`; }
 
-  if (on.length === 0) return `no ${noun}`;
+  if (on.length === 0) { return `no ${noun}`; }
 
   return on.length <= offShown.length ? on.join(", ") : `${noun} but ${offShown.join(", ")}`;
 };

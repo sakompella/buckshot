@@ -30,9 +30,28 @@ const decodeLabels = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array
 
 const openReadOnly = (path: string) =>
   Effect.acquireRelease(
-    Effect.try({ try: () => new Database(resolve(path), { readonly: true }), catch: (cause) => new ScriptError({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),
+    Effect.try({ try: () => new Database(resolve(path), { readonly: true }), catch: (cause) => ScriptError.make({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),
     (database) => Effect.sync(() => { database.close(); }),
   );
+
+const percentile = (sorted: ReadonlyArray<number>, share: number): number => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(share * (sorted.length - 1))))] ?? Number.NaN;
+
+const percent = (value: number): string => (Number.isNaN(value) ? "–" : `${(100 * value).toFixed(value > 0 && value < 0.1 ? 1 : 0)}%`);
+
+const table = (header: ReadonlyArray<string>, rows: ReadonlyArray<ReadonlyArray<string>>): string =>
+  [`| ${header.join(" | ")} |`, `|${header.map(() => "---").join("|")}|`, ...rows.map((row) => `| ${row.join(" | ")} |`)].join("\n");
+
+const flag = (condition: boolean): number => (condition ? 1 : 0);
+
+const print = (text: string): void => {
+  console.log(`${text}\n`);
+};
+
+const median = (values: ReadonlyArray<number>): string => {
+  const sorted = values.toSorted((left, right) => left - right);
+
+  return sorted.length === 0 ? "–" : String(percentile(sorted, 0.5));
+};
 
 /** Prints every table of the report, reading `db`; each rate resamples seed blocks `draws` times. */
 const report = (db: Database, draws: number): void => {
@@ -144,8 +163,6 @@ const report = (db: Database, draws: number): void => {
     });
   };
 
-  const percentile = (sorted: ReadonlyArray<number>, share: number): number => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(share * (sorted.length - 1))))] ?? Number.NaN;
-
   interface Rate {
     readonly numerator: number;
     readonly denominator: number;
@@ -182,26 +199,9 @@ const report = (db: Database, draws: number): void => {
     return { numerator, denominator, low: percentile(sorted, 0.025), high: percentile(sorted, 0.975) };
   };
 
-  const percent = (value: number): string => (Number.isNaN(value) ? "–" : `${(100 * value).toFixed(value > 0 && value < 0.1 ? 1 : 0)}%`);
-
   const show = (rate: Rate): string => (rate.denominator === 0 ? "–" : `${percent(rate.numerator / rate.denominator)} (${rate.numerator}/${rate.denominator}) [${percent(rate.low)}, ${percent(rate.high)}]`);
 
-  const median = (values: ReadonlyArray<number>): string => {
-    const sorted = values.toSorted((left, right) => left - right);
-
-    return sorted.length === 0 ? "–" : String(percentile(sorted, 0.5));
-  };
-
-  const table = (header: ReadonlyArray<string>, rows: ReadonlyArray<ReadonlyArray<string>>): string =>
-    [`| ${header.join(" | ")} |`, `|${header.map(() => "---").join("|")}|`, ...rows.map((row) => `| ${row.join(" | ")} |`)].join("\n");
-
   const modelsIn = (cohort: string): ReadonlyArray<string> => [...new Set(decisions.filter((row) => row.cohort === cohort).map((row) => row.model))].toSorted();
-
-  const flag = (condition: boolean): number => (condition ? 1 : 0);
-
-  const print = (text: string): void => {
-    console.log(`${text}\n`);
-  };
 
   // Coverage
   // ========
@@ -437,7 +437,7 @@ const report = (db: Database, draws: number): void => {
   const groupsOf = (rows: ReadonlyArray<Decision>, key: Key): ReadonlyMap<string, ReadonlyArray<Decision>> => {
     const groups = new Map<string, Array<Decision>>();
 
-    for (const row of rows) groups.set(row[key], [...(groups.get(row[key]) ?? []), row]);
+    for (const row of rows) { groups.set(row[key], [...(groups.get(row[key]) ?? []), row]); }
 
     return groups;
   };
@@ -483,7 +483,7 @@ const report = (db: Database, draws: number): void => {
     for (const group of groups) {
       const value = statistic(group);
 
-      if (value === undefined) continue;
+      if (value === undefined) { continue; }
 
       sum += value;
       positions++;
@@ -561,7 +561,7 @@ const report = (db: Database, draws: number): void => {
         const one = distribution(both.filter((row) => row.model === both[0]?.model));
         const two = distribution(both.filter((row) => row.model !== both[0]?.model));
 
-        if (one.size === 0 || two.size === 0) return undefined;
+        if (one.size === 0 || two.size === 0) { return undefined; }
 
         return [...one.counts].reduce((sum, [choice, count]) => sum + (count / one.size) * ((two.counts.get(choice) ?? 0) / two.size), 0);
       },
@@ -643,7 +643,7 @@ const report = (db: Database, draws: number): void => {
 };
 
 const program = Effect.gen(function* () {
-  const args = yield* Effect.try({ try: () => parseArgs({ args: process.argv.slice(2), options: { db: { type: "string" }, draws: { type: "string" } } }).values, catch: () => new ScriptError({ message: USAGE, exitCode: 1 }) });
+  const args = yield* Effect.try({ try: () => parseArgs({ args: process.argv.slice(2), options: { db: { type: "string" }, draws: { type: "string" } } }).values, catch: () => ScriptError.make({ message: USAGE, exitCode: 1 }) });
   const { db: path, draws = BOOTSTRAP_DRAWS } = yield* decodeArgs(Args, USAGE)(args);
   const db = yield* openReadOnly(path);
 

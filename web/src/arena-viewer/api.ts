@@ -3,10 +3,10 @@ import { Schema } from "effect";
 // The arena viewer's JSON API: what its server encodes and its page decodes.
 // The server reads the analysis database (docs/arena/database.md) read-only.
 
-const Count = Schema.NullOr(Schema.Number);
+const Count = Schema.NullOr(Schema.Finite);
 
 /** A tally per item, in ITEMS order. */
-const PerItem = Schema.Array(Schema.Number);
+const PerItem = Schema.Array(Schema.Finite);
 
 /**
  * How consistent one config is: over the positions it met at least twice, the
@@ -15,17 +15,17 @@ const PerItem = Schema.Array(Schema.Number);
 export const Consistency = Schema.Struct({
   model: Schema.String,
   effort: Schema.String,
-  positions: Schema.Number,
-  agree: Schema.Number,
-  lo: Schema.Number,
-  hi: Schema.Number,
+  positions: Schema.Finite,
+  agree: Schema.Finite,
+  lo: Schema.Finite,
+  hi: Schema.Finite,
 });
 
 export type Consistency = typeof Consistency.Type;
 
 export const ITEMS = ["magnifying glass", "burner phone", "handsaw", "beer", "cigarettes", "inverter", "jammer", "adrenaline"] as const;
 
-export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Number });
+export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Finite });
 
 /** Round winners and prizes from the match's events; ok means every round begun has a winner and every player's prizes sum exactly to its final cash. */
 export const Story = Schema.Struct({ starter: Schema.NullOr(Schema.String), rounds: Schema.Array(Round), ok: Schema.Boolean });
@@ -39,13 +39,13 @@ export const SeatRow = Schema.Struct({
   matchName: Schema.String,
   status: Schema.Literals(["completed", "partial"]),
   startedAt: Schema.String,
-  seed: Schema.Number,
+  seed: Schema.Finite,
   seedBlock: Schema.String,
   codeHash: Schema.String,
   model: Schema.String,
   effort: Schema.String,
   player: Schema.String,
-  position: Schema.Number,
+  position: Schema.Finite,
   winShare: Count,
   cash: Count,
   cost: Count,
@@ -74,9 +74,9 @@ export const SeatAnalysis = Schema.Struct({
   used: PerItem,
   stolen: PerItem,
   story: Schema.NullOr(Story),
-  round: Schema.Number,
-  roundThree: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number])),
-  deficits: Schema.Array(Schema.Number),
+  round: Schema.Finite,
+  roundThree: Schema.NullOr(Schema.Tuple([Schema.Finite, Schema.Finite])),
+  deficits: Schema.Array(Schema.Finite),
 });
 
 export type SeatAnalysis = typeof SeatAnalysis.Type;
@@ -89,14 +89,14 @@ export type SeatAnalysis = typeof SeatAnalysis.Type;
  * no such move.
  */
 export const SeatRegret = Schema.Struct({
-  moves: Schema.Number,
-  total: Schema.Number,
-  accuracy: Schema.Number,
-  best: Schema.Number,
-  inaccuracies: Schema.Number,
-  mistakes: Schema.Number,
-  blunders: Schema.Number,
-  losses: Schema.Array(Schema.Number),
+  moves: Schema.Finite,
+  total: Schema.Finite,
+  accuracy: Schema.Finite,
+  best: Schema.Finite,
+  inaccuracies: Schema.Finite,
+  mistakes: Schema.Finite,
+  blunders: Schema.Finite,
+  losses: Schema.Array(Schema.Finite),
 });
 
 export type SeatRegret = typeof SeatRegret.Type;
@@ -140,7 +140,7 @@ export const Decisions = Schema.Struct({
   stealItem: Column,
   shot: Column,
   odds: Column,
-  checks: Schema.Struct({ ok: Schema.Number, bad: Schema.Number }),
+  checks: Schema.Struct({ ok: Schema.Finite, bad: Schema.Finite }),
 });
 
 export type Decisions = typeof Decisions.Type;
@@ -182,9 +182,9 @@ export const CertainRate = Schema.Struct({
   model: Schema.String,
   effort: Schema.String,
   type: OpportunityType,
-  chose: Schema.Number,
-  opportunities: Schema.Number,
-  bounds: Schema.NullOr(Schema.Struct({ lo: Schema.Number, hi: Schema.Number })),
+  chose: Schema.Finite,
+  opportunities: Schema.Finite,
+  bounds: Schema.NullOr(Schema.Struct({ lo: Schema.Finite, hi: Schema.Finite })),
 });
 
 export type CertainRate = typeof CertainRate.Type;
@@ -223,15 +223,15 @@ export type Shell = typeof Shell.Type;
  * exact, not that the score is a guess. depth is how deep the search got, and limited whether the node budget stopped it.
  */
 export const MoveRegret = Schema.Struct({
-  points: Schema.Number,
+  points: Schema.Finite,
   exact: Schema.Boolean,
   best: Schema.String,
-  bestScore: Schema.Number,
+  bestScore: Schema.Finite,
   chosen: Schema.String,
-  chosenScore: Schema.Number,
-  depth: Schema.Number,
+  chosenScore: Schema.Finite,
+  depth: Schema.Finite,
   limited: Schema.Boolean,
-  values: Schema.Array(Schema.Struct({ label: Schema.String, score: Schema.Number })),
+  values: Schema.Array(Schema.Struct({ label: Schema.String, score: Schema.Finite })),
 });
 
 export type MoveRegret = typeof MoveRegret.Type;

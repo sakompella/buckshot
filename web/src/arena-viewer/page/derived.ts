@@ -1,6 +1,7 @@
 import type { ConfigSummary, Pair, Runs, SeedBlocks } from "../aggregates.ts";
 import { effortParts } from "../../arena/same-treatment.ts";
-import { baseName, colorOf, dashOf, isProvisional, keyOf, labelOf, type MatchRow, matchRows, type SeatFull } from "./data.ts";
+import { baseName, colorOf, dashOf, isProvisional, keyOf, labelOf, matchRows } from "./data.ts";
+import type { MatchRow, SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
@@ -11,7 +12,7 @@ export const memoLast = <Args extends ReadonlyArray<object | string | number | b
   let last: { readonly args: Args; readonly result: Result } | undefined;
 
   return (...args: Args): Result => {
-    if (last !== undefined && last.args.length === args.length && last.args.every((arg, index) => arg === args[index])) return last.result;
+    if (last !== undefined && last.args.length === args.length && last.args.every((arg, index) => arg === args[index])) { return last.result; }
 
     const result = compute(...args);
 

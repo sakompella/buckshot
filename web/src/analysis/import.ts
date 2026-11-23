@@ -10,12 +10,16 @@ import { costOf, DEFAULT_PRICES, loadPrices } from "../arena/cost.ts";
 import { AgentId } from "../arena/agent.ts";
 import { configLabel } from "../arena/model-names.ts";
 import { RunManifest } from "../arena/match.ts";
-import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
+import { CallLine, EventLine } from "../arena/runlog.ts";
+import type { MoveLine } from "../arena/runlog.ts";
 import { MatchManifest, manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
-import { replayOf, type Replay } from "../arena/replay.ts";
+import { winShares } from "../arena/tournament-stats.ts";
+import { replayOf } from "../arena/replay.ts";
+import type { Replay } from "../arena/replay.ts";
 import { modelEntrant } from "../arena/tournament.ts";
 import type { GameEvent, LearnedSecret } from "../domain.ts";
-import { type Letter, type Roster, rosterOf } from "../players.ts";
+import { rosterOf } from "../players.ts";
+import type { Letter, Roster } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { IMPORTER_FILES, IMPORTER_HASH } from "./importer-hash.ts";
 
@@ -25,10 +29,15 @@ const textOf = (path: string): string | undefined => existsSync(path) ? readFile
 
 const decodeTournament = Schema.decodeUnknownSync(Schema.fromJsonString(TournamentFile));
 
-const decodeManifest = Schema.decodeUnknownResult(Schema.fromJsonString(RunManifest));
+/** The run's manifest, as the arena writes it, and the hash of the move log it ends with. */
+const ImportManifest = Schema.Struct({ ...RunManifest.fields, move_log_sha: Schema.optional(Schema.String) });
+
+const decodeManifest = Schema.decodeUnknownResult(Schema.fromJsonString(ImportManifest));
 
 /** The code identity a match played under: the git commit it recorded when it started (ADR-0054), or the code_sha of a manifest from before commits were recorded — the one place the old field is read. */
 const CodeProvenance = Schema.Struct({ git_commit: Schema.optional(Schema.String), code_sha: Schema.optional(Schema.String), instructions_sha: Schema.String });
+
+const decodeProvenance = Schema.decodeUnknownResult(CodeProvenance);
 
 const decodeEvent = Schema.decodeUnknownResult(Schema.fromJsonString(EventLine));
 
@@ -53,9 +62,9 @@ const LEGACY_COHORTS: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = 
 
 /** The comparison a match is pooled in: its tournament's `cohort`; for the tiers tournament, each model's effort sweep or the cross-model games. */
 const cohortOf = (tournament: string, tiers: string | undefined, declared: string | undefined, models: ReadonlyArray<string | null>): string | undefined => {
-  if (declared !== undefined) return declared;
+  if (declared !== undefined) { return declared; }
 
-  if (tiers !== undefined && tournament === tiers) return new Set(models).size === 1 ? `tiers sweep ${models[0]}` : "tiers cross-model";
+  if (tiers !== undefined && tournament === tiers) { return new Set(models).size === 1 ? `tiers sweep ${models[0]}` : "tiers cross-model"; }
 
   return LEGACY_COHORTS.find(([, names]) => names.includes(tournament))?.[0];
 };
@@ -75,7 +84,7 @@ const heardBy = (source: { readonly events: ReadonlyArray<GameEvent>; readonly l
 
 /** Why a finished manifest can't be scored: its standings must cover each seated player exactly once. */
 const scoringProblem = (standings: ReadonlyArray<{ readonly player: string }> | undefined, players: ReadonlyArray<string>): string | undefined => {
-  if (standings === undefined) return "Finished manifest has no standings";
+  if (standings === undefined) { return "Finished manifest has no standings"; }
 
   return standings.length === players.length && players.every((player) => standings.filter((standing) => standing.player === player).length === 1) ? undefined : "Finished manifest standings do not cover each player exactly once";
 };
@@ -96,13 +105,13 @@ const linkOf = (matchDir: string, call: Observation<CallLine>, ending: ReadonlyA
   const next = ending.find(({ player, t }) => player === call.value.agent && t >= call.value.t);
   const logged = call.value.turn;
 
-  if (logged !== undefined && next !== undefined && logged !== next.turn) conflict(matchDir, "a call's logged turn is not the turn of its player's next event", JSON.stringify({ call: { line: call.line, agent: call.value.agent, t: call.value.t, turn: logged }, next }));
+  if (logged !== undefined && next !== undefined && logged !== next.turn) { conflict(matchDir, "a call's logged turn is not the turn of its player's next event", JSON.stringify({ call: { line: call.line, agent: call.value.agent, t: call.value.t, turn: logged }, next })); }
 
   const turn = logged ?? next?.turn;
   const decision = moves.findIndex(({ value }) => (value.by === "agent" || value.by === "fallback") && value.turn === turn);
   const move = moves[decision]?.value;
 
-  if (move !== undefined && move.player !== call.value.agent) conflict(matchDir, `a call and the move at its turn ${turn} are different players`, JSON.stringify({ call: { line: call.line, agent: call.value.agent, t: call.value.t }, move }));
+  if (move !== undefined && move.player !== call.value.agent) { conflict(matchDir, `a call and the move at its turn ${turn} are different players`, JSON.stringify({ call: { line: call.line, agent: call.value.agent, t: call.value.t }, move })); }
 
   return { decision, method: decision === -1 ? "unlinked" : logged === undefined ? "events turn" : "logged turn" };
 };
@@ -132,6 +141,11 @@ export const openAnalysis = (path: string): Database => {
 
 /** Refreshes changed matches atomically per tournament. Source files are never opened for writing. */
 export const importTournaments = ({ database, sources, skipped = {}, tiers }: ImportOptions): void => {
+  const skips = new Map(Object.entries(skipped).map(([dir, names]) => [resolve(dir), names]));
+  const imported = new Set(sources.map((source) => resolve(source)));
+
+  for (const dir of skips.keys()) { if (!imported.has(dir)) { throw new Error(`Import stopped: a skip names a directory that is not imported: ${dir}`); } }
+
   const db = openAnalysis(database);
 
   try {
@@ -153,7 +167,7 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
         const primaryOf = (table: string) => {
           const known = primaryKeys.get(table);
 
-          if (known !== undefined) return known;
+          if (known !== undefined) { return known; }
 
           const columns = new Set(db.query<{ name: string }, []>(`SELECT name FROM pragma_table_info('${table}') WHERE pk > 0`).all().map((column) => column.name));
 
@@ -201,8 +215,10 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
         const scheduledNames = new Set(file.schedule.map((match) => match.name));
 
         for (const entry of readdirSync(dir, { withFileTypes: true })) {
-          if (entry.isDirectory() && existsSync(join(dir, entry.name, "manifest.json")) && !scheduledNames.has(entry.name)) conflict(join(dir, entry.name), "a match directory the schedule does not list", JSON.stringify({ schedule: [...scheduledNames] }));
+          if (entry.isDirectory() && existsSync(join(dir, entry.name, "manifest.json")) && !scheduledNames.has(entry.name)) { conflict(join(dir, entry.name), "a match directory the schedule does not list", JSON.stringify({ schedule: [...scheduledNames] })); }
         }
+
+        for (const name of Object.keys(skips.get(dir) ?? {})) { if (!scheduledNames.has(name)) { conflict(dir, "a skip names a match the schedule does not list", JSON.stringify({ name })); } }
 
         for (const match of file.schedule) {
           const matchId = sha(`${tournamentId}\0${match.name}`);
@@ -214,24 +230,25 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           const manifestText = textOf(manifestPath);
           const eventText = textOf(eventsPath);
           const callText = textOf(callsPath);
-          const skipReason = skipped[dir]?.[match.name];
+          const skipReason = skips.get(dir)?.[match.name];
           const isSkipped = skipReason !== undefined;
 
           // Checked against this tournament's config before the fingerprint, so a config change is checked on unchanged matches too.
           if (manifestText !== undefined) {
             const validation = validateManifest(manifestText);
 
-            if (Result.isFailure(validation)) conflict(matchDir, "manifest.json does not decode", JSON.stringify({ error: validation.failure.message }));
-            else for (const problem of manifestProblems(tournament, match, validation.success)) conflict(matchDir, "the manifest disagrees with the tournament config", JSON.stringify({ problem }));
+            if (Result.isFailure(validation)) { conflict(matchDir, "manifest.json does not decode", JSON.stringify({ error: validation.failure.message })); }
+            else { for (const problem of manifestProblems(tournament, match, validation.success)) {conflict(matchDir, "the manifest disagrees with the tournament config", JSON.stringify({ problem })); }}
           }
 
           const models = match.entrants.map((name) => modelEntrant(file.config, name)?.model ?? null);
           const isExcluded = models.some((model) => model?.toLowerCase().includes(EXCLUDED_MODEL) === true);
           const cohort = cohortOf(file.config.name, tiers, file.config.cohort, models) ?? conflict(matchDir, "the tournament config names no cohort and no tiers tournament names it", JSON.stringify({ tournament: file.config.name }));
-          const fingerprint = sha(JSON.stringify([IMPORTER_HASH, JSON.stringify(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir]));
+          const fingerprint = sha(JSON.stringify([IMPORTER_HASH, JSON.stringify(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir, cohort, match.entrants.map((name) => JSON.stringify(file.config.entrants[name]))]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 
-          if (previous?.fingerprint === fingerprint) continue;
+          if (previous?.fingerprint === fingerprint) { continue; }
+
           db.query("DELETE FROM calls WHERE match_id = ?").run(matchId);
           db.query("DELETE FROM decisions WHERE match_id = ?").run(matchId);
           db.query("DELETE FROM match_seats WHERE match_id = ?").run(matchId);
@@ -241,23 +258,21 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           for (const path of [manifestPath, eventsPath, callsPath]) {
             db.query("UPDATE source_records SET current = 0 WHERE path = ?").run(path);
 
-            if (!existsSync(path) && db.query("SELECT 1 FROM source_files WHERE path = ?").get(path) !== null) conflict(matchDir, "a source file imported before is gone", JSON.stringify({ path }));
+            if (!existsSync(path) && db.query("SELECT 1 FROM source_files WHERE path = ?").get(path) !== null) { conflict(matchDir, "a source file imported before is gone", JSON.stringify({ path })); }
           }
 
           const manifest = manifestText === undefined ? undefined : Result.getOrElse(decodeManifest(manifestText), (error) => conflict(matchDir, "manifest.json does not decode", JSON.stringify({ error: error.message })));
+          const provenance = manifest?.provenance === undefined ? undefined : Result.getOrElse(decodeProvenance(manifest.provenance), (error) => conflict(matchDir, "the manifest's provenance does not decode", JSON.stringify({ error: error.message })));
 
           if (manifest?.status === "finished") {
             const problem = scoringProblem(manifest.standings, match.entrants.map((_, index) => manifest.letters[index] ?? match.seats[index] ?? ""));
 
-            if (problem !== undefined) conflict(matchDir, problem, JSON.stringify({ standings: manifest.standings, letters: manifest.letters }));
+            if (problem !== undefined) { conflict(matchDir, problem, JSON.stringify({ standings: manifest.standings, letters: manifest.letters })); }
           }
 
           // A finished, unskipped match becomes completed only after its replay and end event check out, below.
           const status = manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
-          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(JSON.stringify([tournamentId, match.pairing, match.block, match.seed])), status, cohort, disposition: isExcluded ? "excluded" : isSkipped ? "skipped" : null, status_reason: skipReason ?? (isExcluded ? EXCLUSION : null), started_at: null, ended_at: null, code_hash: null, validated_with: null, instructions_hash: null, source_dir: matchDir, schedule_json: JSON.stringify(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
-          const provenanceObject = manifest?.provenance ?? null;
-          const provenance = Schema.decodeUnknownOption(CodeProvenance)(provenanceObject);
-          db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.getOrElse(Option.map(provenance, ({ git_commit, code_sha }) => git_commit ?? code_sha ?? null), () => null), Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
+          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(JSON.stringify([tournamentId, match.pairing, match.block, match.seed])), status, cohort, disposition: isExcluded ? "excluded" : isSkipped ? "skipped" : null, status_reason: skipReason ?? (isExcluded ? EXCLUSION : null), started_at: null, ended_at: null, code_hash: provenance === undefined ? null : provenance.git_commit ?? provenance.code_sha ?? null, validated_with: null, instructions_hash: provenance?.instructions_sha ?? null, source_dir: matchDir, schedule_json: JSON.stringify(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
 
           if (manifestText !== undefined) {
             observe(manifestPath, manifestText, matchId);
@@ -265,7 +280,8 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           }
 
           const readLines = <A>(path: string, text: string | undefined, decode: (raw: string) => Result.Result<A, Schema.SchemaError>): ReadonlyArray<Observation<A>> => {
-            if (text === undefined) return [];
+            if (text === undefined) { return []; }
+
             observe(path, text, matchId);
             const lines = text.split("\n");
             const values: Array<Observation<A>> = [];
@@ -284,29 +300,29 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           const ended = events.some(({ value }) => value.kind === "end");
 
           // The end event is written just before the finished manifest, so a live match can be read with one and not the other.
-          if (manifest?.status === "finished" && !ended) conflict(matchDir, "the manifest says finished, the events have no end event", JSON.stringify({ manifest: manifest.status, events: events.length }));
+          if (manifest?.status === "finished" && !ended) { conflict(matchDir, "the manifest says finished, the events have no end event", JSON.stringify({ manifest: manifest.status, events: events.length })); }
 
           db.query("UPDATE matches SET started_at = ?, ended_at = ? WHERE id = ?").run(events[0]?.value.t ?? null, events.findLast(({ value }) => value.kind === "end")?.value.t ?? null, matchId);
 
-          const shares = new Map<number, number | null>();
+          const cashes: Array<number | undefined> = [];
 
           for (const [index, name] of match.entrants.entries()) {
             const player = manifest?.letters[index] ?? match.seats[index];
 
-            if (player === undefined) throw new Error(`No player for ${match.name} position ${index + 1}`);
+            if (player === undefined) { throw new Error(`No player for ${match.name} position ${index + 1}`); }
+
             const cash = manifest?.standings?.find((standing) => standing.player === player)?.cash;
-            const high = manifest?.standings === undefined ? undefined : Math.max(...manifest.standings.map((standing) => standing.cash));
-            const winners = manifest?.standings?.filter((standing) => standing.cash === high).length;
             const entrant = file.config.entrants[name];
             const configured = entrant !== undefined && "model" in entrant ? configLabel(entrant.model, entrant.effortLabel ?? entrant.effort) : undefined;
             // A match from before labels were recorded: a model entrant is its config, a bot or an engine its scheduled seat.
             const label = manifest?.labels?.[index] ?? configured ?? match.seats[index] ?? "";
 
-            if (configured !== undefined && label !== configured) conflict(matchDir, `the manifest's label at position ${index + 1} is not its entrant's config`, JSON.stringify({ label, entrant: name, config: entrant }));
-            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, label, cash: cash ?? null, win_share: null, provenance_json: JSON.stringify(provenanceObject) });
-            shares.set(index + 1, cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0);
+            if (configured !== undefined && label !== configured) { conflict(matchDir, `the manifest's label at position ${index + 1} is not its entrant's config`, JSON.stringify({ label, entrant: name, config: entrant })); }
 
-            if (manifest !== undefined && ((Schema.is(AgentId)(match.seats[index]) && manifest.letters[index] !== match.seats[index]) || manifest.seed !== String(match.seed))) conflict(matchDir, `the manifest disagrees with the schedule at position ${index + 1}`, JSON.stringify({ manifest: { letter: manifest.letters[index], seed: manifest.seed }, schedule: { seat: match.seats[index], seed: match.seed } }));
+            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, label, cash: cash ?? null, win_share: null, provenance_json: JSON.stringify(manifest?.provenance ?? null) });
+            cashes.push(cash);
+
+            if (manifest !== undefined && ((Schema.is(AgentId)(match.seats[index]) && manifest.letters[index] !== match.seats[index]) || manifest.seed !== String(match.seed))) { conflict(matchDir, `the manifest disagrees with the schedule at position ${index + 1}`, JSON.stringify({ manifest: { letter: manifest.letters[index], seed: manifest.seed }, schedule: { seat: match.seats[index], seed: match.seed } })); }
           }
 
           const moves: Array<Observation<MoveLine>> = [];
@@ -315,18 +331,36 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           for (const event of events) {
             const value = event.value;
 
-            if (value.kind !== "move" && value.kind !== "fallback") continue;
+            if (value.kind !== "move" && value.kind !== "fallback") { continue; }
+
             const key = value.seq === undefined ? `turn:${value.turn}:${value.player}` : `seq:${value.seq}`;
             const prior = seen.get(key);
 
             // A resumed match can log a move again; the same move twice is one move.
             if (prior !== undefined) {
-              if (prior.turn !== value.turn || prior.player !== value.player || prior.move !== value.move || prior.label !== value.label || prior.by !== value.by) conflict(matchDir, `two different moves logged as ${key}`, JSON.stringify({ first: prior, second: value }));
+              if (prior.turn !== value.turn || prior.player !== value.player || prior.move !== value.move || prior.label !== value.label || prior.by !== value.by) { conflict(matchDir, `two different moves logged as ${key}`, JSON.stringify({ first: prior, second: value })); }
+
               continue;
             }
 
             seen.set(key, value);
             moves.push({ ...event, value });
+          }
+
+          if (manifest?.move_log_sha !== undefined) {
+            const logged = sha(JSON.stringify(moves.map(({ value: { turn, player, move, label, by } }) => ({ turn, player, move, label, by })))).slice(0, 12);
+
+            if (logged !== manifest.move_log_sha) { conflict(matchDir, "the manifest's move log hash is not the hash of the logged moves", JSON.stringify({ manifest: manifest.move_log_sha, logged })); }
+          }
+
+          const deliveredTo = new Map<string, Array<{ readonly line: number; readonly delivery: { readonly from: number; readonly entries: ReadonlyArray<string>; readonly seq: number | undefined; readonly turn: number } }>>();
+
+          for (const { value, line } of events) {
+            if (value.kind !== "delivered") { continue; }
+
+            const key = `${value.player}:${value.turn}`;
+
+            deliveredTo.set(key, [...(deliveredTo.get(key) ?? []), { line, delivery: { from: value.from, entries: value.entries, seq: value.seq, turn: value.turn } }]);
           }
 
           const replayFailed = (reason: string): never => conflict(matchDir, "the replay disagrees with the logged moves", JSON.stringify({ reason }));
@@ -348,18 +382,19 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
                 if (Result.isSuccess(game)) {
                   visible = JSON.stringify(game.success);
 
-                  if (game.success.status === "your turn") legal = JSON.stringify(game.success.moves);
+                  if (game.success.status === "your turn") { legal = JSON.stringify(game.success.moves); }
                 }
               }
             }
 
-            const delivered = events.flatMap(({ value, line }) => value.kind === "delivered" && value.player === move.player && value.turn === move.turn && line < event.line ? [{ from: value.from, entries: value.entries, seq: value.seq, turn: value.turn }] : []);
+            const delivered = (deliveredTo.get(`${move.player}:${move.turn}`) ?? []).flatMap(({ line, delivery }) => (line < event.line ? [delivery] : []));
             put("decisions", { id: sha(`${matchId}\0${ordinal}`), match_id: matchId, ordinal, journal_seq: move.seq ?? null, turn: move.turn, player: move.player, position: move.position, selected_move: move.move, label: move.label, by_whom: move.by, visible_json: visible, legal_json: legal, delivered_json: JSON.stringify(delivered), events_before: eventsBefore, view_provenance: visible === null ? null : "reconstructed:arena/replay.ts + agentGame; not original prompt", source_record: event.record });
 
             if (manifest !== undefined) {
               const next = Result.getOrElse(replayOf(replay, manifest, moves.slice(0, ordinal + 1).map(({ value }) => value)), replayFailed);
 
-              if (Option.isSome(next.divergence)) replayFailed(next.divergence.value);
+              if (Option.isSome(next.divergence)) { replayFailed(next.divergence.value); }
+
               replay = Option.some(next);
             }
           }
@@ -378,24 +413,24 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
             for (const [player, totals] of Object.entries(manifest.agents)) {
               const own = calls.filter(({ value }) => value.agent === player);
 
-              if (totals.model_calls !== own.length) conflict(matchDir, `the manifest's model calls for ${player} disagree with calls.jsonl`, JSON.stringify({ manifest: totals.model_calls, calls: own.length }));
+              if (totals.model_calls !== own.length) { conflict(matchDir, `the manifest's model calls for ${player} disagree with calls.jsonl`, JSON.stringify({ manifest: totals.model_calls, calls: own.length })); }
 
               for (const key of ["input", "output", "cacheRead", "cacheWrite", "reasoning"] as const) {
                 const sum = own.reduce((total, { value }) => total + (value.usage[key] ?? 0), 0);
 
-                if (totals.usage[key] !== undefined && totals.usage[key] !== sum) conflict(matchDir, `the manifest's ${key} tokens for ${player} disagree with calls.jsonl`, JSON.stringify({ manifest: totals.usage[key], calls: sum }));
+                if (totals.usage[key] !== undefined && totals.usage[key] !== sum) { conflict(matchDir, `the manifest's ${key} tokens for ${player} disagree with calls.jsonl`, JSON.stringify({ manifest: totals.usage[key], calls: sum })); }
               }
             }
 
             const finished = Option.getOrThrow(replay);
             const current = finished.session.current(finished.table);
 
-            if (Option.isNone(current) || current.value.game.pending.kind !== "Finished") conflict(matchDir, "the manifest says finished, the replay did not reach the end", JSON.stringify({ pending: Option.isSome(current) ? current.value.game.pending.kind : null }));
+            if (Option.isNone(current) || current.value.game.pending.kind !== "Finished") { conflict(matchDir, "the manifest says finished, the replay did not reach the end", JSON.stringify({ pending: Option.isSome(current) ? current.value.game.pending.kind : null })); }
 
             const replayed = finished.frames.at(-1)?.players.map(({ player, cash }) => ({ player, cash }));
 
             for (const standing of manifest.standings ?? []) {
-              if (replayed?.find(({ player }) => player === standing.player)?.cash !== standing.cash) conflict(matchDir, `the replayed cash of ${standing.player} disagrees with the manifest`, JSON.stringify({ manifest: manifest.standings, replayed }));
+              if (replayed?.find(({ player }) => player === standing.player)?.cash !== standing.cash) { conflict(matchDir, `the replayed cash of ${standing.player} disagrees with the manifest`, JSON.stringify({ manifest: manifest.standings, replayed })); }
             }
           }
 
@@ -404,27 +439,35 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
           if (Option.isSome(end)) {
             const roster = rosterOf(end.value.game.seats, end.value.letters);
 
-            for (const [idx, event] of end.value.events.entries()) put("events", { match_id: matchId, idx, kind: event._tag, json: JSON.stringify(event) });
+            for (const [idx, event] of end.value.events.entries()) { put("events", { match_id: matchId, idx, kind: event._tag, json: JSON.stringify(event) }); }
 
-            for (const [idx, note] of end.value.learned.entries()) put("secrets", { match_id: matchId, idx, socket: note.seat, at: note.at, json: JSON.stringify(note.secret) });
+            for (const [idx, note] of end.value.learned.entries()) { put("secrets", { match_id: matchId, idx, socket: note.seat, at: note.at, json: JSON.stringify(note.secret) }); }
 
-            for (const { letter, seat } of roster.players) db.query("UPDATE match_seats SET socket = ? WHERE match_id = ? AND player = ?").run(seat, matchId, letter);
+            for (const { letter, seat } of roster.players) { db.query("UPDATE match_seats SET socket = ? WHERE match_id = ? AND player = ?").run(seat, matchId, letter); }
+
+            const heard = new Map<Letter, ReadonlyArray<string>>();
 
             // The delivered text and the stored events are one fact: each delivered line is the replay's rendering of the same range.
             for (const { value, line } of events) {
-              if (value.kind !== "delivered") continue;
-              const replayed = heardBy(end.value, roster, value.player).slice(value.from, value.from + value.entries.length);
+              if (value.kind !== "delivered") { continue; }
+
+              const heardText = heard.get(value.player) ?? heardBy(end.value, roster, value.player);
+
+              heard.set(value.player, heardText);
+
+              const replayed = heardText.slice(value.from, value.from + value.entries.length);
               const found = value.entries.findIndex((entry, index) => entry !== replayed[index]);
               const at = found === -1 ? replayed.length : found;
 
-              if (at < value.entries.length) conflict(matchDir, `delivered line ${line} differs from the replayed events`, JSON.stringify({ player: value.player, index: value.from + at, delivered: value.entries[at], replayed: replayed[at] ?? null }));
+              if (at < value.entries.length) { conflict(matchDir, `delivered line ${line} differs from the replayed events`, JSON.stringify({ player: value.player, index: value.from + at, delivered: value.entries[at], replayed: replayed[at] ?? null })); }
             }
           }
 
           if (manifest?.status === "finished" && !isSkipped) {
             db.query("UPDATE matches SET status = 'completed' WHERE id = ?").run(matchId);
 
-            for (const [position, share] of shares) db.query("UPDATE match_seats SET win_share = ? WHERE match_id = ? AND position = ?").run(share, matchId, position);
+            // The standings cover each seated player exactly once, checked above.
+            for (const [index, share] of winShares(cashes.flatMap((cash) => (cash === undefined ? [] : [cash]))).entries()) { db.query("UPDATE match_seats SET win_share = ? WHERE match_id = ? AND position = ?").run(share, matchId, index + 1); }
           }
         }
 
@@ -432,7 +475,8 @@ export const importTournaments = ({ database, sources, skipped = {}, tiers }: Im
         // The seat label is the config's one key: two configs under one label would pool as one.
         const shared = db.query<{ label: string; configs: string }, []>("SELECT s.label, json_group_array(DISTINCT json_remove(e.config_json, '$.endpoint')) AS configs FROM match_seats s JOIN entrants e ON e.id = s.entrant_id GROUP BY s.label HAVING COUNT(DISTINCT json_remove(e.config_json, '$.endpoint')) > 1").all();
 
-        for (const { label, configs } of shared) conflict(dir, `two configs play as ${label}`, configs);
+        for (const { label, configs } of shared) { conflict(dir, `two configs play as ${label}`, configs); }
+
         put("metadata", { key: "schema_version", value: "1" });
         put("metadata", { key: "importer_files", value: JSON.stringify(IMPORTER_FILES) });
         put("metadata", { key: "prices_sha256", value: priceHash });

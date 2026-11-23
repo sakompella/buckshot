@@ -1,4 +1,5 @@
-import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
+import { contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AssistantMessage, TranscriptContext } from "@earendil-works/pi-ai";
 import { Effect, Schema } from "effect";
 
 import { playMatch, REMINDER } from "../src/arena/match.ts";
@@ -25,12 +26,12 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
   const last = texts.at(-1) ?? "";
   const turnInput = texts.findLast((text) => text.startsWith("Your turn."));
 
-  if (turnInput === undefined || (last !== REMINDER && !last.startsWith("Your turn."))) return fauxAssistantMessage(fauxText("Noted."));
+  if (turnInput === undefined || (last !== REMINDER && !last.startsWith("Your turn."))) { return fauxAssistantMessage(fauxText("Noted.")); }
 
   const view = parseView(turnInput.slice(turnInput.indexOf("{")));
   const skips = last === REMINDER ? view.turn % 2 === 1 : view.turn % 9 === 4;
 
-  if (skips) return fauxAssistantMessage(fauxText("I will wait."));
+  if (skips) { return fauxAssistantMessage(fauxText("I will wait.")); }
 
   return fauxAssistantMessage([fauxText("Playing it."), fauxToolCall("play_move", { move: (view.turn * 7 + 3) % view.moves.length, turn: view.turn })], { stopReason: "toolUse" });
 };
@@ -40,9 +41,9 @@ const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWi
 const models = createModels();
 
 faux.setResponses(Array.from({ length: 5_000 }, () => (transcript) => {
-  if (point === "model:in-flight") process.kill(process.pid, "SIGKILL");
+  if (point === "model:in-flight") { process.kill(process.pid, "SIGKILL"); }
 
-  if (point === "model:fault") return fauxAssistantMessage("", { stopReason: "error", errorMessage: "503 faux provider unavailable" });
+  if (point === "model:fault") { return fauxAssistantMessage("", { stopReason: "error", errorMessage: "503 faux provider unavailable" }); }
 
   return decide(transcript);
 }));
@@ -61,8 +62,8 @@ await Effect.runPromise(
     delivery: "on-turn",
     crashAt: (at) => {
       if (at === point && ++seen === Number(occurrence)) {
-        if (signal === "SIGTERM" || signal === "SIGKILL") process.kill(process.pid, signal);
-        else process.exit(CRASH_EXIT);
+        if (signal === "SIGTERM" || signal === "SIGKILL") { process.kill(process.pid, signal); }
+        else { process.exit(CRASH_EXIT); }
       }
     },
   }),

@@ -4,9 +4,11 @@ import { join } from "node:path";
 
 import { Match, Predicate, Schema } from "effect";
 
-import rules, { type BendNode, type BendValue } from "../../generated/rules.mjs";
-import { type Game } from "../bend.ts";
-import { type GameEvent as Event, GameEvent, Item, type LearnedSecret, Move, Seat, type SeatCount, Secret } from "../domain.ts";
+import rules from "../../generated/rules.mjs";
+import type { BendNode, BendValue } from "../../generated/rules.mjs";
+import type { Game } from "../bend.ts";
+import { GameEvent, Item, Move, Seat, Secret } from "../domain.ts";
+import type { GameEvent as Event, LearnedSecret, SeatCount } from "../domain.ts";
 
 // The minimax player (sim/bend-mp/player/, ADR-0043) for the analysis scripts,
 // through its export table sim/bend-mp/analysis.bend. That table is rooted
@@ -66,7 +68,7 @@ const nodesOf = (list: BendNode): ReadonlyArray<BendNode> => {
   while (rest.$ === "Con") {
     const { head, tail } = rest;
 
-    if (!isNode(head) || !isNode(tail)) throw new Error("a Bend cons cell has no head and tail");
+    if (!isNode(head) || !isNode(tail)) { throw new Error("a Bend cons cell has no head and tail"); }
 
     nodes.push(head);
     rest = tail;
@@ -124,7 +126,7 @@ const TABLES = { 2: "TwoSeats", 3: "ThreeSeats", 4: "FourSeats" } as const satis
 export const boardOf = (game: Game): BendNode => {
   const point = rules.point(game.state);
 
-  if (!isPoint(point)) throw new Error("point returned no board");
+  if (!isPoint(point)) { throw new Error("point returned no board"); }
 
   return point.board;
 };
@@ -158,15 +160,15 @@ export const RawMove = Schema.Union([
   Schema.Struct({ $: Schema.Literal("StealJam"), owner: Node, target: Node }),
 ]);
 
-const RawLine = Schema.Struct({ $: Schema.Literal("Line"), move: RawMove, score: Schema.Number, reach: Schema.Struct({ $: Schema.Literals(["Settled", "Reloads", "Cut"]) }) });
+const RawLine = Schema.Struct({ $: Schema.Literal("Line"), move: RawMove, score: Schema.Finite, reach: Schema.Struct({ $: Schema.Literals(["Settled", "Reloads", "Cut"]) }) });
 
 const REACH = { Settled: "settled", Reloads: "reloads", Cut: "cut" } as const;
 
-const RawCached = Schema.Struct({ $: Schema.Literal("Cached"), entries: Schema.Number, hits: Schema.Number, deals: Schema.Number, deal_hits: Schema.Number });
+const RawCached = Schema.Struct({ $: Schema.Literal("Cached"), entries: Schema.Finite, hits: Schema.Finite, deals: Schema.Finite, deal_hits: Schema.Finite });
 
 const RawAnalysis = Schema.Union([
-  Schema.Struct({ $: Schema.Literal("Analysed"), lines: Schema.declare(isBendNode), best: Schema.Number, nodes: Schema.Number, depth: Schema.Number, limited: Schema.Boolean, cached: RawCached }),
-  Schema.Struct({ $: Schema.Literal("Invalid"), reason: Schema.String, nodes: Schema.Number }),
+  Schema.Struct({ $: Schema.Literal("Analysed"), lines: Schema.declare(isBendNode), best: Schema.Finite, nodes: Schema.Finite, depth: Schema.Finite, limited: Schema.Boolean, cached: RawCached }),
+  Schema.Struct({ $: Schema.Literal("Invalid"), reason: Schema.String, nodes: Schema.Finite }),
 ]);
 
 const decodeAnalysis = Schema.decodeUnknownSync(RawAnalysis);
@@ -181,14 +183,14 @@ const seatOf = (node: typeof Node.Type): Seat => decodeSeat(Number(node.$.replac
 
 const itemOf = (node: typeof Node.Type): Item => decodeItem(node.$);
 
+const use = (item: Item): Move => Move.cases.UseItem.make({ slot: 0, item });
+
 /**
  * A whole move as the machine steps an agent's move chains, so that agentMoveText (src/text.ts) words it as the arena did.
  * The player names items, not slots, and agentMoveText reads no slot, so slots are given as 0.
  */
-export const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
-  const use = (item: Item): Move => Move.cases.UseItem.make({ slot: 0, item });
-
-  return Match.value(move).pipe(
+export const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> =>
+  Match.value(move).pipe(
     Match.discriminatorsExhaustive("$")({
       "Shoot": ({ target }): ReadonlyArray<Move> => [Move.cases.PickUp.make({}), Move.cases.Shoot.make({ target: seatOf(target) })],
       "Use": ({ item }) => [use(itemOf(item))],
@@ -197,7 +199,6 @@ export const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
       "StealJam": ({ owner, target }) => [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(owner), slot: 0, item: "Jammer" }), Move.cases.JamTarget.make({ target: seatOf(target) })],
     }),
   );
-};
 
 /** One legal move and its score: the deciding seat's chance of winning the current round, in millionths. */
 export interface Line {
@@ -291,12 +292,12 @@ export interface Player {
 export const loadPlayer = async (dir: string): Promise<Player> => {
   const bend = process.env.BEND ?? Bun.which("bend") ?? undefined;
 
-  if (bend === undefined) throw new Error("bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary");
+  if (bend === undefined) { throw new Error("bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary"); }
 
   const output = join(dir, "player.mjs");
   const build = Bun.spawnSync([bend, PLAYER_SOURCE, "-o", output], { stdout: "pipe", stderr: "pipe" });
 
-  if (build.exitCode !== 0) throw new Error(`Bend player build failed:\n${build.stdout.toString()}${build.stderr.toString()}`);
+  if (build.exitCode !== 0) { throw new Error(`Bend player build failed:\n${build.stdout.toString()}${build.stderr.toString()}`); }
 
   const { default: exports } = decodePlayerModule(await import(output));
 

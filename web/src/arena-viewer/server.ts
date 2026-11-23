@@ -6,7 +6,7 @@ import { Schema } from "effect";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
 import { Blunders, CertainMistakes, Decisions, SeatsResponse } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
-import { type Arena } from "./load.ts";
+import type { Arena } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
 import { PAGE_PATHS } from "../site/route.ts";
 
@@ -47,7 +47,7 @@ const digest = (text: string) => new Bun.CryptoHasher("sha256").update(text).dig
  * The page shell itself holds no data.
  */
 const guardedBy = (password: string | undefined) => (handler: (request: Request) => Response) => {
-  if (password === undefined) return handler;
+  if (password === undefined) { return handler; }
 
   const expected = digest(password);
 
@@ -70,7 +70,7 @@ const assetResponse = async (pathname: string, path: string, request: Request): 
   const file = Bun.file(path);
   const headers = { "cache-control": "public, max-age=31536000, immutable" };
 
-  if (!COMPRESSIBLE.test(pathname) || !/\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")) return new Response(file, { headers });
+  if (!COMPRESSIBLE.test(pathname) || !/\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")) { return new Response(file, { headers }); }
 
   const gzipped = gzippedAssets.get(pathname) ?? Bun.gzipSync(await file.bytes());
 
@@ -84,7 +84,7 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
   const path = join(siteDir, normalize(decodeURIComponent(pathname)));
   const file = Bun.file(path);
 
-  if (pathname !== "/" && (await file.exists())) return pathname.startsWith("/assets/") ? assetResponse(pathname, path, request) : new Response(file);
+  if (pathname !== "/" && (await file.exists())) { return pathname.startsWith("/assets/") ? assetResponse(pathname, path, request) : new Response(file); }
 
   return new Response(Bun.file(join(siteDir, "index.html")), { status: PAGE_PATHS.includes(pathname) ? 200 : 404, headers: { "content-type": "text/html; charset=utf-8" } });
 };

@@ -2,10 +2,13 @@ import type { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
-import { GameEvent, type Item, Seat, Secret, type Shell as Loaded } from "../domain.ts";
-import { Letter, type Roster, rosterOf } from "../players.ts";
+import { GameEvent, Seat, Secret } from "../domain.ts";
+import type { Item, Shell as Loaded } from "../domain.ts";
+import { Letter, rosterOf } from "../players.ts";
+import type { Roster } from "../players.ts";
 import { itemName } from "../text.ts";
-import { type Decisions, ITEMS, NO_GAP, type Pattern, patternBit, type SeatAnalysis, type Shell, type Story } from "./api.ts";
+import { ITEMS, NO_GAP, patternBit } from "./api.ts";
+import type { Decisions, Pattern, SeatAnalysis, Shell, Story } from "./api.ts";
 
 // Per-decision columns for choice patterns, items, reasoning and compute, worked out once at server start.
 // Each player's view is what it heard up to each of its decisions: the match's replayed events and its own secrets,
@@ -32,7 +35,7 @@ export interface MatchLog {
 
 const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(GameEvent));
 
-const SecretRow = Schema.Struct({ socket: Seat, at: Schema.Number, secret: Schema.fromJsonString(Secret) });
+const SecretRow = Schema.Struct({ socket: Seat, at: Schema.Finite, secret: Schema.fromJsonString(Secret) });
 
 const decodeSecret = Schema.decodeUnknownSync(SecretRow);
 
@@ -111,10 +114,10 @@ export class ShellTracker {
           this.inversions++;
           const clue = this.known.get(this.cursor);
 
-          if (clue) clue.shell = flip(clue.shell);
+          if (clue) { clue.shell = flip(clue.shell); }
         },
         Used: ({ item }) => {
-          if (item === "Saw") this.sawed = true;
+          if (item === "Saw") { this.sawed = true; }
         },
         Fired: ({ shell }) => {
           this.spend(shellOf(shell), true);
@@ -131,39 +134,39 @@ export class ShellTracker {
     const chamber = this.chamber();
 
     if (chamber?.known) {
-      if (chamber.known === now) this.checks.ok++;
-      else this.checks.bad++;
+      if (chamber.known === now) { this.checks.ok++; }
+      else { this.checks.bad++; }
     }
 
-    if ((this.inverted ? flip(now) : now) === "live") this.live--;
-    else this.blank--;
+    if ((this.inverted ? flip(now) : now) === "live") { this.live--; }
+    else { this.blank--; }
 
     this.known.delete(this.cursor);
     this.cursor++;
     this.inverted = false;
 
-    if (isShot) this.sawed = false;
+    if (isShot) { this.sawed = false; }
   }
 
   /** The chambered shell, or null when the load is spent. */
   chamber(): Chamber | null {
-    if (this.cursor >= this.total) return null;
+    if (this.cursor >= this.total) { return null; }
 
     const clue = this.known.get(this.cursor);
 
-    if (clue) return { known: clue.shell, by: clue.by, pLive: clue.shell === "live" ? 1 : 0 };
+    if (clue) { return { known: clue.shell, by: clue.by, pLive: clue.shell === "live" ? 1 : 0 }; }
 
     const later = [...this.known].filter(([at]) => at > this.cursor);
     const live = this.live - later.filter(([, { shell }]) => shell === "live").length;
     const blank = this.blank - later.filter(([, { shell }]) => shell === "blank").length;
 
-    if (live + blank <= 0) return null;
+    if (live + blank <= 0) { return null; }
 
     const pLive = this.inverted ? blank / (live + blank) : live / (live + blank);
 
-    if (pLive === 1) return { known: "live", by: "count", pLive };
+    if (pLive === 1) { return { known: "live", by: "count", pLive }; }
 
-    if (pLive === 0) return { known: "blank", by: "count", pLive };
+    if (pLive === 0) { return { known: "blank", by: "count", pLive }; }
 
     return { known: null, by: null, pLive };
   }
@@ -206,8 +209,8 @@ export const roundStory = (log: Pick<MatchLog, "events" | "roster">, cash: Reado
     if (GameEvent.guards.RoundBegan(event)) {
       begun++;
 
-      if (event.round === 0) starter = log.roster.playerOf(event.first).letter;
-    } else if (GameEvent.guards.RoundWon(event)) rounds.push({ winner: log.roster.playerOf(event.seat).letter, prize: event.prize });
+      if (event.round === 0) { starter = log.roster.playerOf(event.first).letter; }
+    } else if (GameEvent.guards.RoundWon(event)) { rounds.push({ winner: log.roster.playerOf(event.seat).letter, prize: event.prize }); }
   }
 
   const isPaid = [...cash].every(([player, total]) => total === sumOf(rounds.flatMap(({ winner, prize }) => (winner === player ? [prize] : []))));
@@ -221,7 +224,7 @@ export interface SeatKey {
   readonly cash: number | null;
 }
 
-const VisiblePlayer = Schema.Struct({ player: Schema.String, health: Schema.optional(Schema.Number), items: Schema.optional(Schema.Array(Schema.String)) });
+const VisiblePlayer = Schema.Struct({ player: Schema.String, health: Schema.optional(Schema.Finite), items: Schema.optional(Schema.Array(Schema.String)) });
 
 export const Visible = Schema.fromJsonString(Schema.Struct({ you: Schema.String, players: Schema.Array(VisiblePlayer) }));
 
@@ -231,12 +234,12 @@ const decodeLegal = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(
 
 const PerDecisionRow = Schema.Struct({
   d: Schema.String,
-  rt: Schema.NullOr(Schema.Number),
-  nulls: Schema.Number,
-  out: Schema.Number,
-  cost: Schema.NullOr(Schema.Number),
-  lat: Schema.NullOr(Schema.Number),
-  tok: Schema.Number,
+  rt: Schema.NullOr(Schema.Finite),
+  nulls: Schema.Finite,
+  out: Schema.Finite,
+  cost: Schema.NullOr(Schema.Finite),
+  lat: Schema.NullOr(Schema.Finite),
+  tok: Schema.Finite,
 });
 
 const DecisionRow = Schema.Struct({
@@ -247,8 +250,8 @@ const DecisionRow = Schema.Struct({
   v: Schema.String,
   legal: Schema.NullOr(Schema.String),
   id: Schema.String,
-  ord: Schema.Number,
-  e: Schema.Number,
+  ord: Schema.Finite,
+  e: Schema.Finite,
   s: Seat,
 });
 
@@ -256,12 +259,14 @@ const decodePerDecision = Schema.decodeUnknownSync(PerDecisionRow);
 
 const decodeDecision = Schema.decodeUnknownSync(DecisionRow);
 
-const itemIndex = (name: string): number => ITEMS.findIndex((item) => item === name);
+const itemNames: ReadonlyArray<string> = ITEMS;
+
+const itemIndex = (name: string): number => itemNames.indexOf(name);
 
 const itemColumn = (item: Item): number => {
   const index = itemIndex(itemName(item));
 
-  if (index < 0) throw new Error(`no item column for ${item}`);
+  if (index < 0) { throw new Error(`no item column for ${item}`); }
 
   return index;
 };
@@ -273,12 +278,12 @@ export const itemsOf = (log: Pick<MatchLog, "events" | "roster">): ReadonlyMap<s
   const count = (seat: Seat, kind: "acquired" | "used" | "stolen", item: Item) => {
     const counts = tallies.get(log.roster.playerOf(seat).letter)?.[kind];
 
-    if (counts) counts[itemColumn(item)] = (counts[itemColumn(item)] ?? 0) + 1;
+    if (counts) { counts[itemColumn(item)] = (counts[itemColumn(item)] ?? 0) + 1; }
   };
 
   for (const event of log.events) {
-    if (GameEvent.guards.Placed(event)) count(event.seat, "acquired", event.item);
-    else if (GameEvent.guards.Used(event)) count(event.seat, event.seat === event.owner ? "used" : "stolen", event.item);
+    if (GameEvent.guards.Placed(event)) { count(event.seat, "acquired", event.item); }
+    else if (GameEvent.guards.Used(event)) { count(event.seat, event.seat === event.owner ? "used" : "stolen", event.item); }
   }
 
   return tallies;
@@ -349,7 +354,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   const seatsOf = new Map<string, Array<number>>();
 
-  for (const [index, seat] of seats.entries()) seatsOf.set(seat.matchId, [...(seatsOf.get(seat.matchId) ?? []), index]);
+  for (const [index, seat] of seats.entries()) { seatsOf.set(seat.matchId, [...(seatsOf.get(seat.matchId) ?? []), index]); }
 
   let tracker = new ShellTracker();
   let currentSeat = "";
@@ -364,7 +369,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   };
 
   const finishMatch = () => {
-    if (log === null) return;
+    if (log === null) { return; }
 
     const indexes = seatsOf.get(currentMatch) ?? [];
     const cash = new Map(indexes.flatMap((index) => seats[index] ?? []).map((seat) => [seat.player, seat.cash ?? 0]));
@@ -375,7 +380,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       const seat = extra[index];
       const tally = items.get(seats[index]?.player ?? "");
 
-      if (seat) Object.assign(seat, { story }, tally);
+      if (seat) { Object.assign(seat, { story }, tally); }
     }
   };
 
@@ -405,7 +410,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     const seatAt = seatIndex.get(currentSeat);
     const seat = seatAt === undefined ? undefined : extra[seatAt];
 
-    if (seatAt === undefined || seat === undefined || log === null) continue;
+    if (seatAt === undefined || seat === undefined || log === null) { continue; }
 
     const visible = decodeVisible(row.v);
 
@@ -425,9 +430,9 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
     const worst = seat.deficits.at(-1);
 
-    if (ownHealth !== undefined && opponentHealth !== undefined && worst !== undefined && opponentHealth - ownHealth > worst) seat.deficits[seat.deficits.length - 1] = opponentHealth - ownHealth;
+    if (ownHealth !== undefined && opponentHealth !== undefined && worst !== undefined && opponentHealth - ownHealth > worst) { seat.deficits[seat.deficits.length - 1] = opponentHealth - ownHealth; }
 
-    if (row.w !== "agent") continue;
+    if (row.w !== "agent") { continue; }
 
     const legal = new Set(decodeLegal(row.legal ?? "[]").map(({ label }) => label));
     const legalLabels = [...legal];
@@ -438,24 +443,24 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     let taken = 0;
 
     const flag = (pattern: Pattern, isAvailable: boolean, isChosen: boolean) => {
-      if (!isAvailable) return;
+      if (!isAvailable) { return; }
 
       chances |= patternBit(pattern);
 
-      if (isChosen) taken |= patternBit(pattern);
+      if (isChosen) { taken |= patternBit(pattern); }
     };
 
-    if (chamber) for (const [pattern, isAvailable, isChosen] of chamberPatterns(chamber, tracker.sawed, legal, row.label)) flag(pattern, isAvailable, isChosen);
+    if (chamber) { for (const [pattern, isAvailable, isChosen] of chamberPatterns(chamber, tracker.sawed, legal, row.label)) {flag(pattern, isAvailable, isChosen); }}
 
     // Inverting a known live shell, then shooting the opponent with the now blank shell: checked at the next shot.
-    if (pendingInvert && (pendingInvert.load !== tracker.loadNo || pendingInvert.cursor !== tracker.cursor || tracker.inversions !== pendingInvert.inversions + 1)) pendingInvert = null;
+    if (pendingInvert && (pendingInvert.load !== tracker.loadNo || pendingInvert.cursor !== tracker.cursor || tracker.inversions !== pendingInvert.inversions + 1)) { pendingInvert = null; }
 
     if (pendingInvert && (isSelf || isOpp)) {
       flag("invertLiveOpp", true, isOpp);
       pendingInvert = null;
     }
 
-    if (row.label === "Use inverter" && chamber?.known === "live") pendingInvert = { load: tracker.loadNo, cursor: tracker.cursor, inversions: tracker.inversions };
+    if (row.label === "Use inverter" && chamber?.known === "live") { pendingInvert = { load: tracker.loadNo, cursor: tracker.cursor, inversions: tracker.inversions }; }
 
     flag("cigsFull", tracker.roundHealth > 0 && (ownHealth ?? 0) >= tracker.roundHealth && legal.has("Use cigarettes"), row.label === "Use cigarettes");
 
@@ -463,18 +468,18 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     let legalSteal = 0;
 
     ITEMS.forEach((item, index) => {
-      if (legal.has(`Use ${item}`)) legalUse |= 1 << index;
+      if (legal.has(`Use ${item}`)) { legalUse |= 1 << index; }
 
-      if (legalLabels.some((label) => label.startsWith(`Steal ${item} from `))) legalSteal |= 1 << index;
+      if (legalLabels.some((label) => label.startsWith(`Steal ${item} from `))) { legalSteal |= 1 << index; }
     });
 
     const used = row.label.startsWith("Use ") ? itemIndex(row.label.slice(4)) : row.label.startsWith("Jam ") ? JAMMER : -1;
     const stolen = /^Steal (.+?) from /.exec(row.label);
     const steal = stolen ? itemIndex(stolen[1] ?? "") : -1;
 
-    if (legal.has("Use jammer") || legalLabels.some((label) => label.startsWith("Jam Player "))) legalUse |= 1 << JAMMER;
+    if (legal.has("Use jammer") || legalLabels.some((label) => label.startsWith("Jam Player "))) { legalUse |= 1 << JAMMER; }
 
-    if (legalLabels.some((label) => label.startsWith("Steal "))) legalUse |= 1 << ADRENALINE;
+    if (legalLabels.some((label) => label.startsWith("Steal "))) { legalUse |= 1 << ADRENALINE; }
 
     const calls = perDecision.get(row.id);
 

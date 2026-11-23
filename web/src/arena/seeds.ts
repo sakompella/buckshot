@@ -1,6 +1,7 @@
 import { Result } from "effect";
 
-import { GameEvent, type SeatCount } from "../domain.ts";
+import { GameEvent } from "../domain.ts";
+import type { SeatCount } from "../domain.ts";
 import { begin } from "../driver.ts";
 import { seedRng } from "../rng.ts";
 
@@ -19,7 +20,7 @@ export const firstPositionOf = (seed: number, table: SeatCount): number =>
     onSuccess: (progress) => {
       const [first] = progress.events.flatMap((event) => GameEvent.matchOrElse(event, { RoundBegan: ({ first: seat }) => [seat] }, () => []));
 
-      if (first === undefined) throw new Error(`the game from seed ${seed} began no round`);
+      if (first === undefined) { throw new Error(`the game from seed ${seed} began no round`); }
 
       return progress.game.seats.indexOf(first) + 1;
     },
@@ -38,7 +39,7 @@ export const balancedSeeds = (table: SeatCount, blocks: number, from: number, ke
   while (seeds.length < blocks) {
     const wanted = started.indexOf(Math.min(...started)) + 1;
 
-    while (seeds.includes(candidate) || firstPositionOf(candidate, table) !== wanted) candidate += 1;
+    while (seeds.includes(candidate) || firstPositionOf(candidate, table) !== wanted) { candidate += 1; }
 
     seeds.push(candidate);
     started[wanted - 1] = (started[wanted - 1] ?? 0) + 1;

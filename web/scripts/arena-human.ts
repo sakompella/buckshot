@@ -21,7 +21,7 @@ const Lists = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String
 const render = (text: string): ReadonlyArray<string> => {
   const at = text.indexOf("{");
 
-  if (at === -1) return [text];
+  if (at === -1) { return [text]; }
 
   const heading = text.slice(0, at).trim();
   const shown = decodeObject(text.slice(at));
@@ -39,7 +39,7 @@ const render = (text: string): ReadonlyArray<string> => {
 
 const path = process.argv[2];
 
-if (path === undefined) throw new Error("Usage: bun scripts/arena-human.ts <socket>");
+if (path === undefined) { throw new Error("Usage: bun scripts/arena-human.ts <socket>"); }
 
 const socket = connect(path);
 
@@ -57,7 +57,7 @@ for await (const line of createInterface({ input: socket })) {
 
     const answer = await typedLines.next();
 
-    if (answer.done === true) break;
+    if (answer.done === true) { break; }
 
     socket.write(`${answer.value}\n`);
   }

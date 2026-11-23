@@ -2,19 +2,24 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { CERTAIN_TYPES, type CertainRate } from "../api.ts";
-import { type Cell as CertainCell, talliesOf } from "./certain.ts";
+import { CERTAIN_TYPES } from "../api.ts";
+import type { CertainRate } from "../api.ts";
+import { talliesOf } from "./certain.ts";
+import type { Cell as CertainCell } from "./certain.ts";
 
 import { noteView, termsView } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
 import { isSameTreatment } from "../../arena/same-treatment.ts";
 import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtRating, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasonedShare, reasoningPerMove } from "./data.ts";
-import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
+import { LUCK_ELO, MOVE_ELO, ROUND_ELO } from "./derived.ts";
+import type { Derived, ModelStats } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { MOVES_BELOW } from "./play-and-moves.ts";
-import { type Lazy, Message, type Model } from "./model.ts";
-import { ANCHOR, INTERVAL_PERCENT, matchWinVsAnchor, type Rating } from "./ratings.ts";
+import { Message } from "./model.ts";
+import type { Lazy, Model } from "./model.ts";
+import { ANCHOR, INTERVAL_PERCENT, matchWinVsAnchor } from "./ratings.ts";
+import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -75,7 +80,7 @@ const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100,
 const ratingText = ({ rating, interval }: Rating): string => `${fmtRating(rating)}${interval === null ? "" : `, ${INTERVAL_PERCENT} interval ${fmtRating(interval.lo)} to ${fmtRating(interval.hi)}`}`;
 
 const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefined): Html => {
-  if (elo === undefined) return h.empty;
+  if (elo === undefined) { return h.empty; }
 
   const whisker = elo.interval === null ? null : { left: percentOf(scale, elo.interval.lo), right: percentOf(scale, elo.interval.hi), clippedLow: elo.interval.lo < scale.from, clippedHigh: elo.interval.hi > scale.to };
 
@@ -131,7 +136,7 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
     [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.OnClick(Message.ClickedLeaderboardRow({ id: m.key }))],
     [
       // The row takes the click anywhere in it; the name is the button that gives the row to the keyboard and to screen readers, and its click bubbles to the row.
-      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "–" : String(elo.tier)]), h.button([h.Type("button"), h.Class("rowbtn"), h.AriaExpanded(isOpen)], nameView(h, m))]),
+      h.td([], [h.span([h.Class("rk")], [elo === undefined || elo.tier === null ? "–" : String(elo.tier)]), h.button([h.Type("button"), h.Class("rowbtn"), h.AriaExpanded(isOpen)], nameView(h, m))]),
       h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
@@ -151,7 +156,7 @@ const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
 export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
 
-  if (m === undefined) return h.empty;
+  if (m === undefined) { return h.empty; }
 
   const details = detailsOf(h, m, derived.everyPooled.some(({ regret }) => regret !== null));
 
@@ -224,9 +229,8 @@ const HEADER_TITLES = new Map([
   ["p99 points lost", P99_TITLE],
 ]);
 
-const headerView = (h: H, label: string): Html => {
-  return h.th(label === "" ? [h.Class("barcol")] : label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : [], [label]);
-};
+const headerView = (h: H, label: string): Html =>
+  h.th(label === "" ? [h.Class("barcol")] : label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : [], [label]);
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
 export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap<string, number>, ratings: ReadonlyMap<string, Rating>): ReadonlyArray<ModelStats> => {

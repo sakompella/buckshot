@@ -4,8 +4,10 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { anchorId, pressable, termsView, tipView } from "./charts.ts";
 import type { Pair } from "../aggregates.ts";
 import { baseName, baseOrder, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, shortName, splitKey, unique } from "./data.ts";
-import { type Derived, memoLast } from "./derived.ts";
-import { Message, type Model } from "./model.ts";
+import { memoLast } from "./derived.ts";
+import type { Derived } from "./derived.ts";
+import { Message } from "./model.ts";
+import type { Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -61,7 +63,7 @@ const versus = memoLast((pairs: ReadonlyArray<Pair>): ReadonlyMap<string, Readon
   };
 
   for (const pair of pairs) {
-    if (pair.scored === 0) continue;
+    if (pair.scored === 0) { continue; }
 
     add(pair.first, pair.second, pair.firstWins, pair.scored);
     add(pair.second, pair.first, pair.secondWins, pair.scored);
@@ -92,11 +94,11 @@ export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
 
 /** `rows` come best first by rating, which is the "rating" sort. */
 const sortedRows = (rows: ReadonlyArray<HeatRow>, sort: string, valueOf: (row: HeatRow) => number): ReadonlyArray<HeatRow> => {
-  if (sort === "rating") return rows;
+  if (sort === "rating") { return rows; }
 
-  if (sort === "model") return rows.toSorted((left, right) => left.label.localeCompare(right.label));
+  if (sort === "model") { return rows.toSorted((left, right) => left.label.localeCompare(right.label)); }
 
-  if (sort === "cost") return rows.toSorted((left, right) => (left.cost || Infinity) - (right.cost || Infinity));
+  if (sort === "cost") { return rows.toSorted((left, right) => (left.cost || Infinity) - (right.cost || Infinity)); }
 
   return rows.toSorted((left, right) => valueOf(right) - valueOf(left) || right.rating - left.rating);
 };
@@ -154,7 +156,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                       ...columns.map((col) => {
                         const cell = cellOfRow(row, col.id);
 
-                        if (cell === null) return h.td([h.Class("cellv none")], ["–"]);
+                        if (cell === null) { return h.td([h.Class("cellv none")], ["–"]); }
 
                         return h.td(
                           [

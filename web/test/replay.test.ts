@@ -7,7 +7,8 @@ import { join } from "node:path";
 
 import { Option, Result, Schema } from "effect";
 
-import { decodeEventLine, type JsonlLine, movesOf, readJsonl } from "../src/arena/jsonl.ts";
+import { decodeEventLine, movesOf, readJsonl } from "../src/arena/jsonl.ts";
+import type { JsonlLine } from "../src/arena/jsonl.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
@@ -41,7 +42,7 @@ const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A
     const cuts = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: bytes.length }), { maxSize: 50 })).toSorted((left, right) => left - right);
     const seen: Array<JsonlLine<A>> = [];
 
-    for (const cut of [...cuts, bytes.length]) seen.push(...readJsonl(bytes.subarray(0, cut).toString("utf8"), decode).slice(seen.length));
+    for (const cut of [...cuts, bytes.length]) { seen.push(...readJsonl(bytes.subarray(0, cut).toString("utf8"), decode).slice(seen.length)); }
 
     expect(seen).toEqual([...readJsonl(bytes.toString("utf8"), decode)]);
     expect(seen.every((line) => line.kind === "read")).toBe(true);

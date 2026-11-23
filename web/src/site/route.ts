@@ -1,5 +1,6 @@
 import { Option, pipe, Predicate, Schema } from "effect";
-import { Route, type Url } from "foldkit";
+import { Route } from "foldkit";
+import type { Url } from "foldkit";
 
 import type { Filter } from "../arena-viewer/page/model.ts";
 

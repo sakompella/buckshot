@@ -105,7 +105,9 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     for key in cells:
         first, second = key[:2]
         low, high = pair_of(first, second)
-        row = {column[("theta", first)]: 1.0, column[("theta", second)]: -1.0}
+        row = {column[("theta", first)]: 1.0}
+        # A self-pair (two efforts merged into one config) cancels: theta - theta = 0.
+        row[column[("theta", second)]] = row.get(column[("theta", second)], 0.0) - 1.0
         if seat:
             row[column[("seat", "")]] = 1.0
         if start:

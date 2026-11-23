@@ -11,7 +11,7 @@ test("an alias is a DNS-safe label that fits beside the worker name, or nothing"
   hegel.test((tc) => {
     const alias = aliasOf(tc.draw(gs.text()));
 
-    if (alias === undefined) return;
+    if (alias === undefined) { return; }
 
     expect(alias).toMatch(/^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$/);
     expect(previewUrl(alias, "me").split(".")[0]?.length).toBeLessThanOrEqual(`https://`.length + 63);
@@ -38,7 +38,7 @@ const LOCAL = new Map([...AGGREGATE_NAMES, "manifest"].map((name) => [name, `{"$
 const site = (overrides: Readonly<Record<string, Response>>) => async (url: string) => {
   const path = new URL(url).pathname;
   const shell = new Response('<div id="root"></div>', { status: PAGE_PATHS.includes(path) ? 200 : 404, headers: { "content-type": "text/html" } });
-  const data = LOCAL.get(path.replace(/^\/data\/|\.json$/g, ""));
+  const data = LOCAL.get(path.replaceAll(/^\/data\/|\.json$/g, ""));
 
   return Promise.resolve(overrides[path] ?? (data === undefined ? shell : new Response(data, { headers: { "content-type": "application/json" } })));
 };

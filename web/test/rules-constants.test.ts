@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { Schema } from "effect";
 
-import rules, { type BendNode } from "../generated/rules.mjs";
+import rules from "../generated/rules.mjs";
+import type { BendNode } from "../generated/rules.mjs";
 import { INSTRUCTIONS } from "../src/arena/match.ts";
 import { Item } from "../src/domain.ts";
 
@@ -17,7 +18,7 @@ test("the item list is Bend's item order", () => {
 });
 
 test("the prompt's handsaw damage and phone range are Bend's", () => {
-  const draw = Schema.decodeUnknownSync(Schema.Struct({ range: Schema.Struct({ lo: Schema.Number }) }))(rules["sm/items:phone.request"](4));
+  const draw = Schema.decodeUnknownSync(Schema.Struct({ range: Schema.Struct({ lo: Schema.Finite }) }))(rules["sm/items:phone.request"](4));
 
   expect(INSTRUCTIONS).toContain(`Handsaw: your next shot does ${rules["domain:damage.amount"]({ $: "Double" })} damage instead of ${rules["domain:damage.amount"]({ $: "Single" })}.`);
   expect(INSTRUCTIONS).toContain(`The position is from ${1 + draw.range.lo} to ${rules["domain:phone.cap"]()}.`);

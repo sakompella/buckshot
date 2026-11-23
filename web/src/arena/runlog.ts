@@ -15,12 +15,12 @@ import { AgentId } from "./agent.ts";
 // a crash left out without writing any twice.
 
 export const Usage = Schema.Struct({
-  input: Schema.Number,
-  output: Schema.Number,
-  cacheRead: Schema.Number,
-  cacheWrite: Schema.Number,
-  cacheWrite1h: Schema.optional(Schema.Number),
-  reasoning: Schema.optional(Schema.Number),
+  input: Schema.Finite,
+  output: Schema.Finite,
+  cacheRead: Schema.Finite,
+  cacheWrite: Schema.Finite,
+  cacheWrite1h: Schema.optional(Schema.Finite),
+  reasoning: Schema.optional(Schema.Finite),
 });
 
 export type Usage = typeof Usage.Type;
@@ -36,7 +36,7 @@ export const CallLine = Schema.Struct({
   thinking_level: Schema.optional(Schema.String),
   stop_reason: Schema.String,
   error: Schema.optional(Schema.String),
-  latency_ms: Schema.optional(Schema.Number),
+  latency_ms: Schema.optional(Schema.Finite),
   /** The turn the call was made on, the key of the move it led to; absent from calls logged before it was recorded. */
   turn: Schema.optional(Schema.Int),
   usage: Usage,
@@ -53,7 +53,7 @@ export const RUN_FORMAT = 1;
 /** Where a line's player sits; `agent` only when an agent plays it. */
 const Sitting = { agent: Schema.optional(AgentId), player: Letter, position: Schema.Int };
 
-export const Standing = Schema.Struct({ player: Letter, cash: Schema.Number, controller: Schema.NullOr(Schema.String) });
+export const Standing = Schema.Struct({ player: Letter, cash: Schema.Finite, controller: Schema.NullOr(Schema.String) });
 
 export type Standing = typeof Standing.Type;
 
@@ -77,7 +77,7 @@ export const EventLine = Schema.Union([
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("delivered"), ...Sitting, via: Schema.Literals(["input", "live", "end"]), turn: Schema.Int, from: Schema.Int, entries: Schema.Array(Schema.String), seq: Schema.optional(Schema.Int) }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("tool"), ...Sitting, name: Schema.String, call_id: Schema.String, ok: Schema.Boolean }),
   MoveLine,
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("turn"), ...Sitting, turn: Schema.Int, wall_ms: Schema.Number, moved: Schema.Boolean }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("turn"), ...Sitting, turn: Schema.Int, wall_ms: Schema.Finite, moved: Schema.Boolean }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("reminder"), ...Sitting, turn: Schema.Int, request: Schema.String }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("fault"), ...Sitting, turn: Schema.Int, error: Schema.String }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("compaction"), ...Sitting }),
@@ -97,7 +97,7 @@ const ReadFields = Schema.Struct({
   request: Schema.optional(Schema.String),
   t: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
-  wall_ms: Schema.optional(Schema.Number),
+  wall_ms: Schema.optional(Schema.Finite),
   entries: Schema.optional(Schema.Array(Schema.String)),
 });
 
@@ -139,11 +139,11 @@ export const faultsSinceLastMove = (dir: string): ReadonlyArray<{ readonly agent
 
 /** Cuts a line a crash left half written, so the file is whole lines again. */
 export const dropPartialLine = (path: string): void => {
-  if (!existsSync(path)) return;
+  if (!existsSync(path)) { return; }
 
   const text = readFileSync(path);
 
-  if (text.length > 0 && text[text.length - 1] !== 0x0a) truncateSync(path, text.lastIndexOf(0x0a) + 1);
+  if (text.length > 0 && text.at(-1) !== 0x0a) { truncateSync(path, text.lastIndexOf(0x0a) + 1); }
 };
 
 /** The journal records events.jsonl already has: move and fallback lines by their seq in the journal's moves, delivered lines by theirs in its deliveries. */

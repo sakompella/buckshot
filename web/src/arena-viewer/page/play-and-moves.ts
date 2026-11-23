@@ -1,5 +1,7 @@
-import { groupBy, keyOf, type SeatFull, sumOf } from "./data.ts";
-import { type Fitted, INTERVAL_Z, pairsOf, type Rating, withTiers } from "./ratings.ts";
+import { groupBy, keyOf, sumOf } from "./data.ts";
+import type { SeatFull } from "./data.ts";
+import { INTERVAL_Z, pairsOf, withTiers } from "./ratings.ts";
+import type { Fitted, Rating } from "./ratings.ts";
 
 // The Elo from play and move quality: each language-model config's headline rating combined with the rating its points
 // lost per move predict. Across the configs the headline rating lies close to a line in points lost per move, and a
@@ -45,7 +47,7 @@ const lostOf = (seats: ReadonlyArray<SeatFull>): { readonly lost: number; readon
 
   const moves = sumOf(blocks.map((block) => block.moves));
 
-  if (blocks.length < 2 || moves === 0) return null;
+  if (blocks.length < 2 || moves === 0) { return null; }
 
   const lost = sumOf(blocks.map(({ total }) => total)) / moves;
 
@@ -72,7 +74,7 @@ const fitLine = (points: ReadonlyArray<Point>): Line => {
     const spread = sd ** 2;
     let line: Pick<Line, "intercept" | "slope"> = { intercept: 0, slope: 0 };
 
-    for (let pass = 0; pass < PASSES; pass++) line = weightedLine(points, points.map((point) => 1 / varianceAround(point, line.slope, spread)));
+    for (let pass = 0; pass < PASSES; pass++) { line = weightedLine(points, points.map((point) => 1 / varianceAround(point, line.slope, spread))); }
 
     const cost = sumOf(
       points.map((point) => {
@@ -82,7 +84,7 @@ const fitLine = (points: ReadonlyArray<Point>): Line => {
       }),
     );
 
-    if (cost < best.cost) best = { line: { ...line, spread }, cost };
+    if (cost < best.cost) { best = { line: { ...line, spread }, cost }; }
   }
 
   return best.line;
@@ -94,12 +96,12 @@ export const playAndMoveRatings = (headline: ReadonlyMap<string, Rating>, seats:
     const rating = headline.get(key);
     const lost = lostOf(own);
 
-    return rating?.interval == null || lost === null
+    return rating === undefined || rating.interval === null || lost === null
       ? []
       : [{ key, rating: rating.rating, ratingVariance: ((rating.interval.hi - rating.interval.lo) / (2 * INTERVAL_Z)) ** 2, lost: lost.lost, lostVariance: lost.variance }];
   });
 
-  if (points.length < 3) return new Map();
+  if (points.length < 3) { return new Map(); }
 
   const line = fitLine(points);
 
@@ -131,7 +133,7 @@ export const headlineRatings = (results: Fitted, combined: ReadonlyMap<string, R
     const own = results.ratings.get(key);
     const ownDraws = results.draws.get(key);
 
-    if ((matches.get(key)?.length ?? 0) >= MOVES_BELOW || own?.interval == null || rating.interval === null || ownDraws === undefined) continue;
+    if ((matches.get(key)?.length ?? 0) >= MOVES_BELOW || own === undefined || own.interval === null || rating.interval === null || ownDraws === undefined) { continue; }
 
     const scale = (rating.interval.hi - rating.interval.lo) / (own.interval.hi - own.interval.lo);
 

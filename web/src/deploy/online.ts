@@ -12,7 +12,7 @@ const MAX_ALIAS = 63 - WORKER.length - 1;
 
 /** A preview alias from a label such as a branch name or a date, or undefined when nothing usable is left of it. */
 export const aliasOf = (label: string): string | undefined => {
-  const alias = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+|-+$/g, "").slice(0, MAX_ALIAS).replace(/-+$/, "");
+  const alias = label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^[^a-z]+|-+$/g, "").slice(0, MAX_ALIAS).replace(/-+$/, "");
 
   return ALIAS_PATTERN.test(alias) ? alias : undefined;
 };
@@ -36,7 +36,7 @@ const pageProblem = async (fetcher: Fetch, base: string, path: string, status: n
   const response = await fetcher(base + path);
   const text = await response.text();
 
-  if (response.status !== status) return `status ${response.status}`;
+  if (response.status !== status) { return `status ${response.status}`; }
 
   return text.includes('<div id="root"') ? undefined : "no app shell";
 };
@@ -67,7 +67,7 @@ export const siteProblems = async (fetcher: Fetch, base: string, local: Readonly
       const response = await fetcher(`${base}/data/${name}.json`);
       const text = await response.text();
 
-      if (response.status !== 200 || !(response.headers.get("content-type") ?? "").includes("json")) return [`/data/${name}.json: status ${response.status}, ${response.headers.get("content-type")}`];
+      if (response.status !== 200 || !(response.headers.get("content-type") ?? "").includes("json")) { return [`/data/${name}.json: status ${response.status}, ${response.headers.get("content-type")}`]; }
 
       served.set(name, text);
 

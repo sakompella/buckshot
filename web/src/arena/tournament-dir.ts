@@ -1,28 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 
 import { Option, Result, Schema } from "effect";
 
 import { SeatCount } from "../domain.ts";
 import { AgentId } from "./agent.ts";
-import { type PriceTable, totalsBy } from "./cost.ts";
-import { type CallLine, endingFault, faultsIn, faultsSinceLastMove, readCalls } from "./runlog.ts";
-import {
-  ScheduledMatch,
-  assignAccounts,
-  endpointOf,
-  type MatchAccounts,
-  type Tournament,
-  TournamentConfig,
-  TournamentError,
-  modelEntrant,
-  resolveConfig,
-  scheduleOf,
-  unfinished,
-} from "./tournament.ts";
+import { totalsBy } from "./cost.ts";
+import type { PriceTable } from "./cost.ts";
+import { endingFault, faultsIn, faultsSinceLastMove, readCalls } from "./runlog.ts";
+import type { CallLine } from "./runlog.ts";
+import { ScheduledMatch, assignAccounts, endpointOf, TournamentConfig, TournamentError, modelEntrant, resolveConfig, scheduleOf, unfinished } from "./tournament.ts";
+import type { MatchAccounts, Tournament } from "./tournament.ts";
 import { firstPositionOf } from "./seeds.ts";
-import { type PlayedMatch, type Player, winShares } from "./tournament-stats.ts";
+import { winShares } from "./tournament-stats.ts";
+import type { PlayedMatch, Player } from "./tournament-stats.ts";
 
 // A tournament directory: tournament.json and one directory per scheduled match,
 // each with the arena's run files. tournament.json and the matches' manifests
@@ -40,23 +33,23 @@ export const TournamentFile = Schema.Struct({
 
 export type TournamentFile = typeof TournamentFile.Type;
 
-const fail = (message: string) => Result.fail(new TournamentError({ message }));
+const fail = (message: string) => Result.fail(TournamentError.make({ message }));
 
 const fileOf = (dir: string) => join(dir, "tournament.json");
 
 /** The directory's tournament.json, or an error that says why it can't be read. */
 export const readTournamentFile = (dir: string): Result.Result<TournamentFile, TournamentError> =>
   existsSync(fileOf(dir))
-    ? Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentFile))(readFileSync(fileOf(dir), "utf8")), (error) => new TournamentError({ message: `${fileOf(dir)} is not valid: ${error.message}` }))
+    ? Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentFile))(readFileSync(fileOf(dir), "utf8")), (error) => TournamentError.make({ message: `${fileOf(dir)} is not valid: ${error.message}` }))
     : fail(`${dir} has no tournament.json`);
 
 export const tournamentOf = (file: TournamentFile): Result.Result<Tournament, TournamentError> => resolveConfig(file.config);
 
-/** A tournament grows by new entrants and endpoints, listed pairings after its own and more seed blocks, so the matches it already scheduled keep their names, seats, seeds and endpoints. */
-const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean => {
-  const fixed = ({ endpoints: _endpoints, entrants: _entrants, pairings: _pairings, blocksPerPairing: _blocks, ...rest }: TournamentConfig) => rest;
+const fixed = ({ endpoints: _endpoints, entrants: _entrants, pairings: _pairings, blocksPerPairing: _blocks, ...rest }: TournamentConfig) => rest;
 
-  return (
+/** A tournament grows by new entrants and endpoints, listed pairings after its own and more seed blocks, so the matches it already scheduled keep their names, seats, seeds and endpoints. */
+const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean =>
+  (
     !("allOf" in before.pairings) &&
     !("allOf" in after.pairings) &&
     isDeepStrictEqual(fixed(before), fixed(after)) &&
@@ -64,7 +57,7 @@ const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean =
     Object.entries(before.endpoints).every(([name, endpoint]) => {
       const next = after.endpoints[name];
 
-      if (next === undefined) return false;
+      if (next === undefined) { return false; }
 
       const { accounts: previousAccounts, ...previousConnection } = endpoint;
       const { accounts: nextAccounts, ...nextConnection } = next;
@@ -74,7 +67,6 @@ const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean =
     Object.entries(before.entrants).every(([name, entrant]) => isDeepStrictEqual(after.entrants[name], entrant)) &&
     isDeepStrictEqual(after.pairings.slice(0, before.pairings.length), before.pairings)
   );
-};
 
 const writeFile = (dir: string, file: TournamentFile) => {
   mkdirSync(dir, { recursive: true });
@@ -85,11 +77,11 @@ const writeFile = (dir: string, file: TournamentFile) => {
 
 /** Starts the directory's tournament, confirms that this config is the one it holds, or grows it: this config's new matches go after the ones scheduled, in the order scheduleOf gives them. */
 export const openTournament = (dir: string, tournament: Tournament, gitCommit: string, now: Date): Result.Result<TournamentFile, TournamentError> => {
-  if (!existsSync(fileOf(dir))) return Result.succeed(writeFile(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) }));
+  if (!existsSync(fileOf(dir))) { return Result.succeed(writeFile(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) })); }
 
   return Result.flatMap(readTournamentFile(dir), (file) => {
     // A config the tournament has already grown from is part of it, as when a run with several configs is repeated.
-    if (isDeepStrictEqual(file.config, tournament.config) || growsInto(tournament.config, file.config)) return Result.succeed(file);
+    if (isDeepStrictEqual(file.config, tournament.config) || growsInto(tournament.config, file.config)) { return Result.succeed(file); }
 
     if (growsInto(file.config, tournament.config)) {
       const scheduled = new Set(file.schedule.map((match) => match.name));
@@ -117,7 +109,7 @@ export const MatchManifest = Schema.Struct({
   controllers: Schema.Array(Schema.String),
   letters: Schema.Array(Schema.String),
   delivery: Schema.String,
-  standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
+  standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Finite }))),
   provenance: Schema.Struct({ git_commit: Schema.optional(Schema.String), agents: Schema.Record(Schema.String, Described) }),
   agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
@@ -148,7 +140,7 @@ const AccountProvenance = Schema.Struct({ provenance: Schema.Struct({ agents: Sc
 export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccounts | undefined => {
   const path = join(dir, match.name, "manifest.json");
 
-  if (!existsSync(path)) return undefined;
+  if (!existsSync(path)) { return undefined; }
 
   const manifest = Schema.decodeSync(Schema.fromJsonString(AccountProvenance))(readFileSync(path, "utf8"));
 
@@ -175,11 +167,11 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
     const entrant = modelEntrant(config, match.entrants[index] ?? "");
     const endpoint = endpointOf(config, match.entrants[index] ?? "");
 
-    if (!isLetter(seat) || entrant === undefined || endpoint === undefined) return [];
+    if (!isLetter(seat) || entrant === undefined || endpoint === undefined) { return []; }
 
     const played = manifest.provenance.agents[seat];
 
-    if (played === undefined) return [`the manifest does not say which model agent ${seat} played`];
+    if (played === undefined) { return [`the manifest does not say which model agent ${seat} played`]; }
 
     return [
       ...(played.model === entrant.model ? [] : [`agent ${seat} played ${played.model}, the schedule says ${entrant.model}`]),
@@ -219,11 +211,11 @@ export const readMatch = (dir: string, tournament: Tournament, match: ScheduledM
     const manifest = yield* Result.mapError(readManifest(matchDir), (message) => [message]);
     const problems = manifestProblems(tournament, match, manifest);
 
-    if (problems.length > 0) return yield* Result.fail(problems);
+    if (problems.length > 0) { return yield* Result.fail(problems); }
 
     const code = manifest.provenance.git_commit;
 
-    if (code === undefined) return yield* Result.fail(["the manifest records no git commit, so the match started before the code version was one (ADR-0054)"]);
+    if (code === undefined) { return yield* Result.fail(["the manifest records no git commit, so the match started before the code version was one (ADR-0054)"]); }
 
     const shares = yield* Result.mapError(sharesOf(match, manifest), (message) => [message]);
     const table = yield* Result.mapError(decodeSeatCount(match.seats.length), () => [`${match.seats.length} seats is not a table size`]);
@@ -260,8 +252,8 @@ export interface Cooldown {
 
 /** A provider's usage-limit refusal, with the seconds until it resets: the endpoint's model cooldown, or the provider limit it passes on. */
 const UsageLimit = Schema.Union([
-  Schema.Struct({ code: Schema.Literal("model_cooldown"), reset_seconds: Schema.Number }),
-  Schema.Struct({ type: Schema.Literal("usage_limit_reached"), resets_in_seconds: Schema.Number }),
+  Schema.Struct({ code: Schema.Literal("model_cooldown"), reset_seconds: Schema.Finite }),
+  Schema.Struct({ type: Schema.Literal("usage_limit_reached"), resets_in_seconds: Schema.Finite }),
 ]);
 
 const decodeUsageLimit = Schema.decodeUnknownOption(Schema.fromJsonString(UsageLimit));
@@ -296,7 +288,7 @@ export const cooldownOf = (dir: string, config: TournamentConfig, match: Schedul
 
     return Option.filter(
       Option.flatMap(limitSecondsOf(fault.error, refusals), (seconds) => {
-        if (entrant === undefined) return Option.none();
+        if (entrant === undefined) { return Option.none(); }
 
         const cooldown = { model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds };
 
@@ -322,25 +314,9 @@ export const RETRY: Retry = { attempts: 3, pauseMs: 120_000 };
 /** How long a slot with no match to start waits before it looks again, at most. */
 const IDLE_MS = 60_000;
 
-const pause = async (ms: number, stop: AbortSignal): Promise<void> =>
-  new Promise<void>((resume) => {
-    if (stop.aborted) {
-      resume();
-
-      return;
-    }
-
-    const timer = setTimeout(resume, ms);
-
-    stop.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resume();
-      },
-      { once: true },
-    );
-  });
+const pause = async (ms: number, stop: AbortSignal): Promise<void> => {
+  await sleep(ms, undefined, { signal: stop }).catch(() => undefined);
+};
 
 /** How runPending treats models: `caps` holds the most matches a model plays at once, for a model with a tight rate limit; a match with a model in `last` starts only when no other match can; a recorded cooldown of a model in `forget` is not read at the start, as when its provider reset early; a new match pins the `prefer` accounts first among equally loaded ones, as when the operator picks the account that resets soonest. */
 export interface Scheduling {
@@ -352,6 +328,8 @@ export interface Scheduling {
   /** Account ids fixed by seat letter: a new match pins that seat to the account, whatever the load. */
   readonly pin?: Readonly<Record<string, string>>;
 }
+
+const cooldownKey = (model: string, account?: string) => JSON.stringify([model, account ?? null]);
 
 /**
  * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
@@ -378,7 +356,6 @@ export const runPending = async (
   const playing = new Map<string, number>();
 
   const modelsOf = (match: ScheduledMatch) => new Set(match.entrants.flatMap((name) => modelEntrant(config, name)?.model ?? []));
-  const cooldownKey = (model: string, account?: string) => JSON.stringify([model, account ?? null]);
 
   const cool = ({ model, account, until }: Cooldown) => {
     const key = cooldownKey(model, account);
@@ -399,7 +376,7 @@ export const runPending = async (
   };
 
   const isReady = (match: ScheduledMatch) => {
-    if (![...modelsOf(match)].every((model) => !isCooling(model) && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity))) return false;
+    if (![...modelsOf(match)].every((model) => !isCooling(model) && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity))) { return false; }
 
     const accounts = accountsFor(match);
 
@@ -413,9 +390,9 @@ export const runPending = async (
   const isLast = (match: ScheduledMatch) => [...modelsOf(match)].some((model) => last.has(model));
 
   const countPlaying = (match: ScheduledMatch, change: 1 | -1) => {
-    for (const model of modelsOf(match)) playing.set(model, (playing.get(model) ?? 0) + change);
+    for (const model of modelsOf(match)) { playing.set(model, (playing.get(model) ?? 0) + change); }
 
-    for (const account of new Set(Object.values(assigned.get(match.name) ?? {}))) accountLoad.set(account, (accountLoad.get(account) ?? 0) + change);
+    for (const account of new Set(Object.values(assigned.get(match.name) ?? {}))) { accountLoad.set(account, (accountLoad.get(account) ?? 0) + change); }
   };
 
   // A slot with nothing to start waits until a reset, a minute, or the end of a
@@ -427,7 +404,7 @@ export const runPending = async (
   for (const match of queue) {
     const accounts = recordedAccounts(dir, match);
 
-    if (accounts !== undefined) assigned.set(match.name, accounts);
+    if (accounts !== undefined) { assigned.set(match.name, accounts); }
 
     Option.match(Option.filter(cooldownOf(dir, config, match, Date.now()), ({ model }) => !forget.has(model)), { onNone: () => undefined, onSome: cool });
   }
@@ -445,7 +422,7 @@ export const runPending = async (
 
       const accounts = accountsFor(match);
 
-      if (accounts === undefined) throw new Error("a ready match has no available accounts");
+      if (accounts === undefined) { throw new Error("a ready match has no available accounts"); }
 
       assigned.set(match.name, accounts);
       countPlaying(match, 1);
@@ -473,7 +450,7 @@ export const runPending = async (
 
         failures.set(match.name, failed);
 
-        if (failed < retry.attempts && Option.isSome(endingFault(join(dir, match.name)))) queue.push(match);
+        if (failed < retry.attempts && Option.isSome(endingFault(join(dir, match.name)))) { queue.push(match); }
 
         await pause(retry.pauseMs, stop);
       }

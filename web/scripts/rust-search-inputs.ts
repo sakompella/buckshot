@@ -6,9 +6,10 @@ import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 import { Option, Result, Schema } from "effect";
 
-import { type AgentSource } from "../src/agent/view.ts";
+import type { AgentSource } from "../src/agent/view.ts";
 import { moveCode, nativeInput } from "../src/analysis/native-input.ts";
-import { boardOf, loadPlayer, ownLog, RELOAD_RULES, type Memo, type Reload } from "../src/analysis/player.ts";
+import { boardOf, loadPlayer, ownLog, RELOAD_RULES } from "../src/analysis/player.ts";
+import type { Memo, Reload } from "../src/analysis/player.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { MoveLine } from "../src/arena/runlog.ts";

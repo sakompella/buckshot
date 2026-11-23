@@ -3,12 +3,14 @@ import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "no
 import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { Option, Result } from "effect";
+import { Effect, Fiber, Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
-import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, type MatchAccounts, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
+import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, scheduleOf, unfinished } from "../src/arena/tournament.ts";
+import type { ScheduledMatch, MatchAccounts, TournamentError } from "../src/arena/tournament.ts";
 import { gitCommit } from "../src/arena/match.ts";
-import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
+import type { Settled } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
 // process running scripts/arena.ts, at most --parallel at a time (default 5).
@@ -77,13 +79,13 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--only <match>]... [--pin <seat>=<id>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]");
+if (configPaths.length === 0) { exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--only <match>]... [--pin <seat>=<id>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]"); }
 
-if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
+if (!Number.isInteger(parallel) || parallel < 1) { exit("--parallel must be a whole number from 1"); }
 
-if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limit must be a whole number from 1");
+if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) { exit("--limit must be a whole number from 1"); }
 
-if (first !== undefined && (!Number.isInteger(first) || first < 1)) exit("--first must be a whole number from 1");
+if (first !== undefined && (!Number.isInteger(first) || first < 1)) { exit("--first must be a whole number from 1"); }
 
 const caps = new Map(
   values.cap.map((cap) => {
@@ -143,7 +145,7 @@ if (values["dry-run"]) {
 
   console.log(`${name}: ${tournament.pairings.length} pairings, ${blocksPerPairing} block${blocksPerPairing === 1 ? "" : "s"} each, ${schedule.length} matches, ${delivery} delivery`);
 
-  for (const [index, pairing] of tournament.pairings.entries()) console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches, seeds ${tournament.seeds[index]?.slice(0, blocksPerPairing).join(", ")}`);
+  for (const [index, pairing] of tournament.pairings.entries()) { console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches, seeds ${tournament.seeds[index]?.slice(0, blocksPerPairing).join(", ")}`); }
 
   process.exit(0);
 }
@@ -162,7 +164,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     stop.abort();
 
-    for (const child of children) child.kill("SIGTERM");
+    for (const child of children) { child.kill("SIGTERM"); }
   });
 }
 
@@ -171,34 +173,38 @@ const webOf = (match: ScheduledMatch): string | undefined =>
   Option.match(startedUnder(dir, match), { onNone: () => WEB, onSome: (code) => (code === CODE ? WEB : checkouts.get(code)) });
 
 /** One match as a child process, which gives its exit code. Its output is appended to the match's arena.log. */
-const runOne = async (match: ScheduledMatch, accounts: MatchAccounts): Promise<number> =>
-  new Promise((done) => {
-    const matchDir = join(dir, match.name);
+const runOne = async (match: ScheduledMatch, accounts: MatchAccounts): Promise<number> => {
+  const { promise, resolve: done } = Promise.withResolvers<number>();
+  const matchDir = join(dir, match.name);
 
-    mkdirSync(matchDir, { recursive: true });
+  mkdirSync(matchDir, { recursive: true });
 
-    const [command = "nice", ...rest] = childCommand(matchDir, file.config, match);
-    const log = openSync(join(matchDir, "arena.log"), "a");
+  const [command = "nice", ...rest] = childCommand(matchDir, file.config, match);
+  const log = openSync(join(matchDir, "arena.log"), "a");
 
-    // The child gets its own copy of the log's descriptor when it spawns, so this one closes right away.
-    const child = (() => {
-      try {
-        return spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys, accounts), stdio: ["ignore", log, log] });
-      } finally {
-        closeSync(log);
-      }
-    })();
+  // The child gets its own copy of the log's descriptor when it spawns, so this one closes right away.
+  const child = (() => {
+    try {
+      return spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys, accounts), stdio: ["ignore", log, log] });
+    } finally {
+      closeSync(log);
+    }
+  })();
 
-    children.add(child);
-    child.on("close", (code) => {
-      children.delete(child);
-      done(code ?? 1);
-    });
-    child.on("error", () => {
-      children.delete(child);
-      done(1);
-    });
+  children.add(child);
+  child.on("close", (code) => {
+    children.delete(child);
+    done(code ?? 1);
   });
+  child.on("error", () => {
+    children.delete(child);
+    done(1);
+  });
+
+  const code = await promise;
+
+  return code;
+};
 
 const tail = (match: ScheduledMatch, lines: number): string => {
   const text = readFileSync(join(dir, match.name, "arena.log"), "utf8").trimEnd().split("\n");
@@ -216,9 +222,9 @@ const report = (settled: Settled) => {
 
   console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costOf(dir, prices, [match]))}, total ${money(costOf(dir, prices, file.schedule))}`);
 
-  if (settled.status === "cooling") console.log(`  ${settled.cooldown.model}${settled.cooldown.account === undefined ? "" : ` on ${settled.cooldown.account}`} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`);
+  if (settled.status === "cooling") { console.log(`  ${settled.cooldown.model}${settled.cooldown.account === undefined ? "" : ` on ${settled.cooldown.account}`} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`); }
 
-  if (status === "failed") console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`);
+  if (status === "failed") { console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`); }
 };
 
 /** Each config's own matches, the ones it added to the tournament, for the progress lines. */
@@ -247,7 +253,7 @@ const noteProgress = (event: string) => {
 };
 
 const settle = (settled: Settled) => {
-  if (settled.status === "failed") failedRuns += 1;
+  if (settled.status === "failed") { failedRuns += 1; }
 
   report(settled);
 };
@@ -271,11 +277,11 @@ for (const code of new Set(waitingCodes)) {
 
 noteProgress("started");
 
-const every30Minutes = setInterval(() => { noteProgress("check"); }, 30 * 60 * 1000);
+const every30Minutes = Effect.runFork(Effect.sleep("30 minutes").pipe(Effect.andThen(Effect.sync(() => { noteProgress("check"); })), Effect.forever));
 
 const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget, prefer, pin });
 
-clearInterval(every30Minutes);
+await Effect.runPromise(Fiber.interrupt(every30Minutes));
 
 const failed = settled.filter(({ status }) => status === "failed").length;
 
@@ -284,7 +290,7 @@ const remaining = unfinished(scope, finishedNames(dir, file.schedule)).filter(is
 
 console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
 
-if (remaining > 0) console.log("Rerun the same command to resume the rest.");
+if (remaining > 0) { console.log("Rerun the same command to resume the rest."); }
 
 console.log(`Stats: bun scripts/arena-stats.ts ${dir}`);
 

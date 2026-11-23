@@ -3,7 +3,8 @@ import { Result } from "effect";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { effortName, modelName } from "../src/arena/model-names.ts";
 import { readTournamentFile, tournamentOf } from "../src/arena/tournament-dir.ts";
-import { FEW_SEEDS, type Report, reportOf } from "../src/arena/tournament-report.ts";
+import { FEW_SEEDS, reportOf } from "../src/arena/tournament-report.ts";
+import type { Report } from "../src/arena/tournament-report.ts";
 import type { Interval } from "../src/arena/tournament-stats.ts";
 import { modelEntrant } from "../src/arena/tournament.ts";
 

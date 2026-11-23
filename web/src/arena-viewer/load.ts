@@ -5,11 +5,14 @@ import { Effect, Schema } from "effect";
 import { configOf } from "../arena/same-treatment.ts";
 
 import { analyse } from "./analysis.ts";
-import { type Consistency, type Decisions, type Seat, SeatRow } from "./api.ts";
-import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
+import { SeatRow } from "./api.ts";
+import type { Consistency, Decisions, Seat } from "./api.ts";
+import { NO_CERTAIN, openCertain } from "./certain.ts";
+import type { Certain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
 import { openLuck } from "./luck.ts";
-import { openRegret, type Regret } from "./regret.ts";
+import { openRegret } from "./regret.ts";
+import type { Regret } from "./regret.ts";
 import { assertCurrentImport } from "../analysis/importer-hash.ts";
 import { ScriptError } from "../script.ts";
 
@@ -116,7 +119,7 @@ export const openArena = (dbPath: string, paths: ArenaPaths = {}) =>
           throw error;
         }
       },
-      catch: (cause) => new ScriptError({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
+      catch: (cause) => ScriptError.make({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
     }),
     (arena) =>
       Effect.sync(() => {

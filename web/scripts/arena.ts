@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 
 import { createModels } from "@earendil-works/pi-ai";
-import { Effect, Schema } from "effect";
+import { Console, Effect, Random, Schema } from "effect";
 
 import { AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
 import { agentEndpoint, labelOf, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
@@ -25,7 +25,7 @@ const { values } = parseArgs({
   args: process.argv.slice(2),
   options: {
     dir: { type: "string", default: `../_work/arena/${new Date().toISOString().replaceAll(":", "").slice(0, 15)}` },
-    seed: { type: "string", default: String(Math.floor(Math.random() * 2 ** 31)) },
+    seed: { type: "string" },
     seats: { type: "string", default: "A,B" },
     rotation: { type: "string", default: "0" },
     delivery: { type: "string", default: "on-turn" },
@@ -36,11 +36,13 @@ const USAGE = "usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed
 
 const Flags = Schema.Struct({
   dir: Schema.String,
-  seed: Schema.String,
+  seed: Schema.optional(Schema.String),
   seats: Schema.String,
   rotation: Schema.NumberFromString.check(Schema.isInt()),
   delivery: Schema.Literals(DELIVERIES),
 });
+
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
 
 const isAgent = Schema.is(AgentId);
 
@@ -55,8 +57,10 @@ const connectHuman = async (player: Letter) => {
 };
 
 const program = Effect.gen(function* () {
-  const { dir, seed, rotation, delivery, ...flags } = yield* decodeArgs(Flags, USAGE)(values);
-  const seats = yield* Schema.decodeUnknownEffect(Schema.Array(SeatSpec))(flags.seats.split(",")).pipe(Effect.mapError((error) => new ScriptError({ message: `--seats: ${error.message}\n${USAGE}`, exitCode: 1 })));
+  const { dir, seed: given, rotation, delivery, ...flags } = yield* decodeArgs(Flags, USAGE)(values);
+  const random = yield* Random.nextIntBetween(0, 2 ** 31 - 1);
+  const seed = given ?? String(random);
+  const seats = yield* Schema.decodeUnknownEffect(Schema.Array(SeatSpec))(flags.seats.split(",")).pipe(Effect.mapError((error) => ScriptError.make({ message: `--seats: ${error.message}\n${USAGE}`, exitCode: 1 })));
   const seating = seatingOf(seats, rotation);
   const models = createModels();
 
@@ -71,11 +75,13 @@ const program = Effect.gen(function* () {
     { concurrency: 1 },
   );
 
-  console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((seat, index) => `position ${index + 1}: ${seat}`).join(", ")}`);
+  yield* Console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((seat, index) => `position ${index + 1}: ${seat}`).join(", ")}`);
 
   const result = yield* playMatch({ dir, seed, controllers: seating.map((seat) => (isAgent(seat) ? "Agent" : seat)), entrants, connectHuman, models, delivery });
 
-  console.log(JSON.stringify({ dir, ...result }, null, 2));
+  const summary = yield* encodeJson({ dir, ...result });
+
+  yield* Console.log(summary);
 });
 
 await runMain(program);

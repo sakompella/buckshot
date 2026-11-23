@@ -1,6 +1,7 @@
 import { Result, Schema } from "effect";
 
-import { EventLine, type MoveLine } from "./runlog.ts";
+import { EventLine } from "./runlog.ts";
+import type { MoveLine } from "./runlog.ts";
 
 // Reads the JSONL files of arena run directories (runlog.ts describes the
 // layout). A match may still be playing, so a file can end in a line its writer

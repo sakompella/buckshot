@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 
 import { Option } from "effect";
 
-import { type Board, type GameEvent as Event, GameEvent, Item, type LearnedSecret, type Seat, Secret, type Shell } from "../domain.ts";
-import { type Roster } from "../players.ts";
+import { GameEvent, Item, Secret } from "../domain.ts";
+import type { Board, GameEvent as Event, LearnedSecret, Seat, Shell } from "../domain.ts";
+import type { Roster } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
-import { type Orders, type OwnEntry, ownLog, type Player } from "./player.ts";
+import { ownLog } from "./player.ts";
+import type { Orders, OwnEntry, Player } from "./player.ts";
 
 // One player's own information at a decision, rebuilt from its log: the public
 // events and the secrets that player heard. The shell belief comes from the
@@ -68,7 +70,7 @@ export const summaryOf = (orders: Orders): Summary => {
 export const certainAt = (summary: Summary, position: number): Option.Option<Shell> => {
   const live = summary.live[position];
 
-  if (live === undefined || summary.orders === 0) return Option.none();
+  if (live === undefined || summary.orders === 0) { return Option.none(); }
 
   return live === summary.orders ? Option.some("Live") : live === 0 ? Option.some("Blank") : Option.none();
 };
@@ -98,15 +100,15 @@ export const knowledgeOf = (belief: Pick<Player, "orders">, log: ReadonlyArray<O
   const chamber = certainAt(privateSummary, 0);
   const none = { public: publicSummary, private: privateSummary, chamber, source: Option.none(), clue: Option.none() };
 
-  if (Option.isNone(chamber)) return none;
+  if (Option.isNone(chamber)) { return none; }
 
-  if (Option.isSome(certainAt(publicSummary, 0))) return { ...none, source: Option.some("public") };
+  if (Option.isSome(certainAt(publicSummary, 0))) { return { ...none, source: Option.some("public") }; }
 
   const clues = log.filter((entry) => Option.isSome(clueKind(entry)));
   const alone = (clue: OwnEntry): boolean => Option.isSome(certainAt(summaryOf(belief.orders(log.filter((entry) => entry.kind === "event" || entry === clue), true)), 0));
   const deciding = clues.findLast(alone);
 
-  if (deciding === undefined) return { ...none, source: Option.some("combined"), clue: Option.fromUndefinedOr(clues.at(-1)?.index) };
+  if (deciding === undefined) { return { ...none, source: Option.some("combined"), clue: Option.fromUndefinedOr(clues.at(-1)?.index) }; }
 
   return { ...none, source: clueKind(deciding), clue: Option.some(deciding.index) };
 };
@@ -160,7 +162,7 @@ export const ledgerStep = (ledger: Ledger, event: Event, index: number): Ledger 
       Used: ({ seat, owner, slot, item }) => {
         const held = (holding: Holding) => holding.seat === owner && holding.slot === slot && holding.item === item;
 
-        if (!ledger.open.some(held)) return { ...ledger, problems: [...ledger.problems, `event ${index}: used ${item} that the ledger does not hold`] };
+        if (!ledger.open.some(held)) { return { ...ledger, problems: [...ledger.problems, `event ${index}: used ${item} that the ledger does not hold`] }; }
 
         return seat === owner ? closeWhere(ledger, held, "used", index) : closeWhere(ledger, held, "stolen", index, Option.some(seat));
       },
@@ -195,9 +197,9 @@ export const itemMoveOf = (label: string): Option.Option<ItemMove> => {
   const used = /^Use (.+)$/.exec(label);
   const stolen = /^Steal (.+?) from Player [A-D]/.exec(label);
 
-  if (stolen?.[1] !== undefined) return Option.map(Option.fromUndefinedOr(ITEM_BY_NAME.get(stolen[1])), (item) => ({ item, stolen: true }));
+  if (stolen?.[1] !== undefined) { return Option.map(Option.fromUndefinedOr(ITEM_BY_NAME.get(stolen[1])), (item) => ({ item, stolen: true })); }
 
-  if (used?.[1] !== undefined) return Option.map(Option.fromUndefinedOr(ITEM_BY_NAME.get(used[1])), (item) => ({ item, stolen: false }));
+  if (used?.[1] !== undefined) { return Option.map(Option.fromUndefinedOr(ITEM_BY_NAME.get(used[1])), (item) => ({ item, stolen: false })); }
 
   return /^Jam Player [A-D]/.test(label) ? Option.some({ item: "Jammer", stolen: false }) : Option.none();
 };
@@ -232,6 +234,8 @@ export interface PositionKeys {
   readonly belief: string;
 }
 
+const weights = (orders: Orders) => [...new Set(orders)].toSorted().map((order) => [order, orders.filter((other) => other === order).length]);
+
 /**
  * Keys under which two decisions are the same position for the deciding player. Both name players relative to the decider and
  * include the code and instructions hashes; neither includes the player's letter, seat, opponent or match.
@@ -254,8 +258,6 @@ export const positionKeys = (roster: Roster, seat: Seat, board: Board, log: Read
   const learnedBy = ordered.slice(1).map((view) =>
     log.filter((entry) => entry.kind === "event" && GameEvent.matchOrElse(entry.event, { Used: (used) => used.seat === view.seat && (used.item === "Glass" || used.item === "Phone") }, () => false)).length,
   );
-
-  const weights = (orders: Orders) => [...new Set(orders)].toSorted().map((order) => [order, orders.filter((other) => other === order).length]);
 
   return { exact: hash(JSON.stringify([table, entries])), belief: hash(JSON.stringify([table, weights(orders.public), weights(orders.private), learnedBy])) };
 };

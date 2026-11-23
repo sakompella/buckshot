@@ -1,18 +1,20 @@
-import { Array as Arr, Data, Match, Option, Result, Schema } from "effect";
+import { Array as Arr, Match, Option, Result, Schema } from "effect";
 
-import rules, { type BendNode } from "../generated/rules.mjs";
-import { Board, Briefcase, Counter, GameEvent, Move, Secret, Stage, type Damage, type Direction, type DrawLabel, Item, type HeardSecret, type Mode, type Seat, type SeatCount, type SeatView, type Shell, type Slot } from "./domain.ts";
+import rules from "../generated/rules.mjs";
+import type { BendNode } from "../generated/rules.mjs";
+import { Board, Briefcase, Counter, GameEvent, Move, Seat, Secret, Stage, Item } from "./domain.ts";
+import type { Damage, Direction, DrawLabel, HeardSecret, Mode, SeatCount, SeatView, Shell, Slot } from "./domain.ts";
 
 // The one boundary between the app and the Bend build. It is the only file
 // that writes Bend constructor tags, and it decodes every value Bend returns
 // before the app sees it. Raw schemas mirror the Bend shapes exactly; small
 // functions then convert them to the app types in domain.ts.
 
-export class BendContractError extends Data.TaggedError("BendContractError")<{ readonly call: string; readonly detail: string }> {}
+export class BendContractError extends Schema.TaggedError<BendContractError>()("BendContractError", { call: Schema.String, detail: Schema.String }) {}
 
-export class StaleAnswer extends Data.TaggedError("StaleAnswer")<{ readonly expected: number; readonly received: number }> {}
+export class StaleAnswer extends Schema.TaggedError<StaleAnswer>()("StaleAnswer", { expected: Schema.Finite, received: Schema.Finite }) {}
 
-export class NoPrompt extends Data.TaggedError("NoPrompt")<{ readonly seat: Seat }> {}
+export class NoPrompt extends Schema.TaggedError<NoPrompt>()("NoPrompt", { seat: Seat }) {}
 
 export type AnswerError = BendContractError | StaleAnswer | NoPrompt;
 
@@ -71,7 +73,7 @@ const arrayToList = <A>(items: ReadonlyArray<A>): RawList<A> => items.reduceRigh
 const maybeToOption = <A>(maybe: RawMaybe<A>): Option.Option<A> => (maybe.$ === "Some" ? Option.some(maybe.value) : Option.none());
 
 // A Nat crosses to JS as a plain number: Bend checks it lies in 0..2^53.
-const Nat = Schema.Number;
+const Nat = Schema.Finite;
 
 // Enumerations
 // ============
@@ -254,7 +256,7 @@ type RawSlots = typeof RawSlots.Type;
 const slotsOf = (raw: RawSlots): ReadonlyArray<Option.Option<Item>> =>
   [raw.s0, raw.s1, raw.s2, raw.s3, raw.s4, raw.s5, raw.s6, raw.s7].map((slot) => Option.map(maybeToOption(slot), itemOf));
 
-const RawSeatView = Schema.Struct({ $: Schema.Literal("SeatView"), counter: RawCounter, slots: RawSlots, cash: Schema.Number, briefcase: RawBriefcase });
+const RawSeatView = Schema.Struct({ $: Schema.Literal("SeatView"), counter: RawCounter, slots: RawSlots, cash: Schema.Finite, briefcase: RawBriefcase });
 
 type RawSeatView = typeof RawSeatView.Type;
 
@@ -384,7 +386,7 @@ const RawEvent = Schema.Union([
   Schema.Struct({ $: Schema.Literal("Inverted"), seat: RawSeat }),
   Schema.Struct({ $: Schema.Literal("JamApplied"), by: RawSeat, target: RawSeat }),
   Schema.Struct({ $: Schema.Literal("DirectionFlipped"), direction: RawDirection }),
-  Schema.Struct({ $: Schema.Literal("RoundWon"), seat: RawSeat, prize: Schema.Number }),
+  Schema.Struct({ $: Schema.Literal("RoundWon"), seat: RawSeat, prize: Schema.Finite }),
   Schema.Struct({ $: Schema.Literal("MatchConcluded") }),
 ]);
 
@@ -471,7 +473,7 @@ const RawStepped = Schema.Struct({ $: Schema.Literal("Stepped"), state: RawState
 const decode =
   <A>(schema: Schema.Codec<A>, call: string) =>
   (value: BendNode): Result.Result<A, BendContractError> =>
-    Result.mapError(Schema.decodeUnknownResult(schema)(value), (error) => new BendContractError({ call, detail: error.message }));
+    Result.mapError(Schema.decodeUnknownResult(schema)(value), (error) => BendContractError.make({ call, detail: error.message }));
 
 const decodeStepped = decode(RawStepped, "answer");
 
@@ -548,7 +550,7 @@ const stepFrom = (table: SeatCount, ticket: Ticket, stepped: BendNode): Result.R
 
     for (const seat of game.seats) {
       for (const heard of listToArray(yield* decodeHeard(rules.hear(notes, seatNode(seat))))) {
-        if (heard.$ === "Learned") learned.push({ seat, secret: secretOf(heard.secret) });
+        if (heard.$ === "Learned") { learned.push({ seat, secret: secretOf(heard.secret) }); }
       }
     }
 
@@ -564,7 +566,7 @@ const nextTicket = (ticket: Ticket): Ticket => ({ match: ticket.match, generatio
 const checkTicket = (game: Game, ticket: Ticket): Result.Result<Game, StaleAnswer> =>
   ticket.match === game.ticket.match && ticket.generation === game.ticket.generation
     ? Result.succeed(game)
-    : Result.fail(new StaleAnswer({ expected: game.ticket.generation, received: ticket.generation }));
+    : Result.fail(StaleAnswer.make({ expected: game.ticket.generation, received: ticket.generation }));
 
 /** Answers a Draw with a value in 0..size-1 (Bend clamps anything larger). */
 export const answerDraw = (game: Game, ticket: Ticket, value: number): Result.Result<Step, AnswerError> =>
@@ -575,7 +577,7 @@ export const answerPrompt = (game: Game, ticket: Ticket, seat: Seat, index: numb
   Result.gen(function* () {
     const current = yield* checkTicket(game, ticket);
     const prompts = current.pending.kind === "Choose" ? current.pending.prompts : [];
-    const prompt = yield* Result.fromOption(Arr.findFirst(prompts, (candidate) => candidate.seat === seat), () => new NoPrompt({ seat }));
+    const prompt = yield* Result.fromOption(Arr.findFirst(prompts, (candidate) => candidate.seat === seat), () => NoPrompt.make({ seat }));
 
     return yield* stepFrom(current.table, nextTicket(current.ticket), rules.answer(current.state, rules["prompt.answer"](prompt.raw, index)));
   });

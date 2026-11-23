@@ -16,10 +16,11 @@ const importerFiles = (): ReadonlyArray<string> => {
   const seen = new Set<string>();
 
   const visit = (path: string): void => {
-    if (seen.has(path)) return;
+    if (seen.has(path)) { return; }
+
     seen.add(path);
 
-    for (const { path: specifier } of transpiler.scanImports(readFileSync(path, "utf8"))) if (specifier.startsWith(".")) visit(resolve(dirname(path), specifier));
+    for (const { path: specifier } of transpiler.scanImports(readFileSync(path, "utf8"))) { if (specifier.startsWith(".")) {visit(resolve(dirname(path), specifier)); }}
   };
 
   visit(resolve(import.meta.dir, "import.ts"));
@@ -33,11 +34,11 @@ export const IMPORTER_FILES: Readonly<Record<string, string>> = Object.fromEntri
 /** The importer code hash every validated match is stamped with. The Python analysis reads it by running this file. */
 export const IMPORTER_HASH = sha(JSON.stringify(IMPORTER_FILES));
 
-if (import.meta.main) console.log(IMPORTER_HASH);
+if (import.meta.main) { console.log(IMPORTER_HASH); }
 
 /** Refuses a database with a match that was validated by other importer, replay or rules code than this checkout's. */
 export const assertCurrentImport = (db: Database): void => {
   const stale = db.query<{ name: string; validated_with: string | null }, [string]>("SELECT name, validated_with FROM matches WHERE replay_status = 'validated' AND validated_with IS NOT ? LIMIT 3").all(IMPORTER_HASH);
 
-  if (stale.length > 0) throw new Error(`The analysis database was validated by other replay or rules code (now ${IMPORTER_HASH}); re-import it. Such as: ${JSON.stringify(stale)}`);
+  if (stale.length > 0) { throw new Error(`The analysis database was validated by other replay or rules code (now ${IMPORTER_HASH}); re-import it. Such as: ${JSON.stringify(stale)}`); }
 };

@@ -9,7 +9,7 @@ import type { Regret } from "./regret.ts";
 // The server's blunder list: every searched move that gave up BLUNDER_POINTS or more, found by asking the regret
 // database for each match and the analysis database for the label of the move taken.
 
-const LabelRow = Schema.Struct({ ordinal: Schema.Number, player: Schema.String, label: Schema.String });
+const LabelRow = Schema.Struct({ ordinal: Schema.Finite, player: Schema.String, label: Schema.String });
 
 const decodeLabel = Schema.decodeUnknownSync(LabelRow);
 
@@ -31,7 +31,7 @@ export const findBlunders = (db: Database, regret: Regret | null, seatIndex: Rea
   const found = matchIds.flatMap((matchId): ReadonlyArray<Found> => {
     const blunders = [...(regret?.moves(matchId) ?? [])].filter(([, move]) => move.points >= BLUNDER_POINTS);
 
-    if (blunders.length === 0) return [];
+    if (blunders.length === 0) { return []; }
 
     const decisions = new Map(labelOf.all(matchId).map((raw) => decodeLabel(raw)).map((row) => [row.ordinal, row]));
 

@@ -17,7 +17,7 @@ test("an arena URL gives back the filter and open row it was built from", () => 
     const maybeRow = tc.draw(gs.booleans()) ? Option.some(`${tc.draw(gs.sampledFrom(NAMES))}|max`) : Option.none();
     const route = routeAt(arenaHref(filter, maybeRow));
 
-    if (!SiteRoute.guards.Arena(route)) throw new Error(`${arenaHref(filter, maybeRow)} is not an arena URL`);
+    if (!SiteRoute.guards.Arena(route)) { throw new Error(`${arenaHref(filter, maybeRow)} is not an arena URL`); }
 
     expect(arenaStateOf(route)).toEqual({ filter, maybeRow });
   });

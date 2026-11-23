@@ -3,12 +3,13 @@ import { join } from "node:path";
 
 import { Option, Schema } from "effect";
 
-import { type AgentSource } from "../agent/view.ts";
+import type { AgentSource } from "../agent/view.ts";
 import { nativeInput } from "../analysis/native-input.ts";
 import { boardOf, ownLog, RawMove, stepsOf } from "../analysis/player.ts";
-import { type Letter, rosterOf } from "../players.ts";
+import { rosterOf } from "../players.ts";
+import type { Letter } from "../players.ts";
 import { agentMoveText } from "../text.ts";
-import { type EngineSeat } from "./agent.ts";
+import type { EngineSeat } from "./agent.ts";
 
 // Engine seats: the Rust search (sim/rust, buckshot-search) plays them the way the regret scorer
 // (tools/arena/score_regret.py) values a move. The position is the player's own log and the public board, so the
@@ -19,10 +20,10 @@ import { type EngineSeat } from "./agent.ts";
 const RUST = new URL("../../../sim/rust", import.meta.url).pathname;
 
 const SearchResult = Schema.Struct({
-  lines: Schema.optional(Schema.Array(Schema.Struct({ move: RawMove, score: Schema.Number }))),
+  lines: Schema.optional(Schema.Array(Schema.Struct({ move: RawMove, score: Schema.Finite }))),
   best: Schema.optional(Schema.Int),
   depth: Schema.optional(Schema.Int),
-  nodes: Schema.Number,
+  nodes: Schema.Finite,
   error: Schema.optional(Schema.String),
 });
 
@@ -32,11 +33,11 @@ const decodeResult = Schema.decodeUnknownOption(Schema.fromJsonString(SearchResu
 const searchBinary = (): string => {
   const given = process.env.BUCKSHOT_SEARCH;
 
-  if (given !== undefined) return given;
+  if (given !== undefined) { return given; }
 
   const build = Bun.spawnSync([process.env.CARGO ?? "cargo", "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", "f64,seats-2", "--message-format", "json"], { cwd: RUST, stderr: "pipe" });
 
-  if (build.exitCode !== 0) throw new Error(`buckshot-search build failed:\n${build.stderr.toString()}`);
+  if (build.exitCode !== 0) { throw new Error(`buckshot-search build failed:\n${build.stderr.toString()}`); }
 
   const built = build.stdout
     .toString()
@@ -47,7 +48,7 @@ const searchBinary = (): string => {
       return Schema.is(Schema.Struct({ reason: Schema.Literal("compiler-artifact"), target: Schema.Struct({ name: Schema.Literal("buckshot-search") }), executable: Schema.String }))(message) ? [message.executable] : [];
     })[0];
 
-  if (built === undefined) throw new Error("cargo built no buckshot-search binary");
+  if (built === undefined) { throw new Error("cargo built no buckshot-search binary"); }
 
   return built;
 };
@@ -93,25 +94,25 @@ export const openEngine = (): Engine => {
         throw new Error(`${problem}; dumped to ${dump}`);
       };
 
-      if (search.exitCode !== 0) return fault(`buckshot-search exited ${search.exitCode}`);
+      if (search.exitCode !== 0) { return fault(`buckshot-search exited ${search.exitCode}`); }
 
       const result = Option.getOrElse(decodeResult(output), () => fault("buckshot-search wrote no result"));
 
-      if (result.error !== undefined) return fault(`buckshot-search: ${result.error}`);
+      if (result.error !== undefined) { return fault(`buckshot-search: ${result.error}`); }
 
       const labels = (() => {
         try {
           return (result.lines ?? []).map(({ move }) => agentMoveText(roster, me, stepsOf(move)));
-        } catch (cause) {
-          return fault(`buckshot-search wrote a move this table cannot have: ${String(cause)}`);
+        } catch (error) {
+          return fault(`buckshot-search wrote a move this table cannot have: ${String(error)}`);
         }
       })();
 
-      if (!sameMoves(labels, menu)) return fault(`buckshot-search's root moves ${JSON.stringify(labels)} are not Bend's menu ${JSON.stringify(menu)}`);
+      if (!sameMoves(labels, menu)) { return fault(`buckshot-search's root moves ${JSON.stringify(labels)} are not Bend's menu ${JSON.stringify(menu)}`); }
 
       const label = labels[result.best ?? -1];
 
-      if (label === undefined) return fault(`buckshot-search's best move ${result.best} is not one of its moves`);
+      if (label === undefined) { return fault(`buckshot-search's best move ${result.best} is not one of its moves`); }
 
       return { label, depth: result.depth ?? 0, nodes: result.nodes };
     },

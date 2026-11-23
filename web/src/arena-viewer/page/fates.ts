@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { addBehavior, type Behavior, type ConfigItems, type Fates, NO_BEHAVIOR, sumFates } from "../aggregates.ts";
+import { addBehavior, NO_BEHAVIOR, sumFates } from "../aggregates.ts";
+import type { Behavior, ConfigItems, Fates } from "../aggregates.ts";
 import { ITEMS } from "../api.ts";
 import { anchorId, markTip } from "./charts.ts";
 import { baseName, baseOrder, colorOf, groupBy, splitKey, sumOf } from "./data.ts";

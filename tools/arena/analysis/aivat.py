@@ -173,7 +173,7 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
     matches = pd.DataFrame(rows, columns=["mi", "match_id", "seed", "block", "first", "second", "letter1", "letter2", "starter"])
     ids = set(matches.match_id)
     dec = pd.read_sql(
-        "SELECT match_id, ordinal, player, round, remaining, private_known, private_orders, private_live_json, shot, sawed, item,"
+        "SELECT match_id, ordinal, player, round, remaining, private_known, private_orders, private_live_min, private_live_max, private_live_json, shot, sawed, item,"
         " health_json, own_items_json, opponent_items_json FROM decisions",
         kn,
     )
@@ -227,6 +227,19 @@ def shots_of(d: Data) -> pd.DataFrame:
     return sh
 
 
+def chamber_chance(pins: dict[int, bool], remaining: int, live_min: int, live_max: int) -> float:
+    """The chamber's live chance, uniform over the shell orders that fit the pinned shells (position from the chamber: live).
+
+    `live_min` and `live_max` are the fewest and most live shells left in the orders the mover's own log allows. They differ only while the mover's
+    inverter on an unknown chamber is unresolved: the orders before it held (min + max) / 2 live, and the chamber is the inverse of an unpinned one of them.
+    """
+    if 0 in pins:
+        return float(pins[0])
+    unpinned = (live_min + live_max) / 2 - sum(pins.values())
+    chance = unpinned / (remaining - len(pins))
+    return chance if live_min == live_max else 1 - chance
+
+
 def true_live_chances(d: Data, sh: pd.DataFrame) -> list[float]:
     """The chamber's live chance given the clues of both players: uniform over the shell orders they all fit."""
     rows_by, clue_by = defaultdict(list), defaultdict(list)
@@ -260,12 +273,8 @@ def true_live_chances(d: Data, sh: pd.DataFrame) -> list[float]:
                     g = C[oc] + at - 1
                     know[g] = flipped(m, g, oc + 1, row.ordinal, lv)
         know = {g: v for g, v in know.items() if cs <= g < cs + rem}
-        u = {**know, **by_index(known_at[(m, row.ordinal)], cs)}
-        if cs in u:
-            return float(u[cs])
-        if abs(row.El - round(row.El)) < 1e-9 and rem > len(u):
-            return (round(row.El) - sum(u.values())) / (rem - len(u))
-        return row.p
+        pins = {g - cs: v for g, v in {**know, **by_index(known_at[(m, row.ordinal)], cs)}.items()}
+        return chamber_chance(pins, rem, row.private_live_min, row.private_live_max)
 
     letters = d.matches.set_index("match_id")[["letter1", "letter2"]]
     rows = sh.join(letters, on="match_id")

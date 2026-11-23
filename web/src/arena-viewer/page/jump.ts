@@ -12,7 +12,7 @@ let landedY = 0;
 export const scrollToTarget = (id: string): void => {
   const target = document.getElementById(id);
 
-  if (target === null) return;
+  if (target === null) { return; }
 
   reveal(target);
   scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
@@ -22,7 +22,7 @@ export const scrollToTarget = (id: string): void => {
 
 /** Re-lands the jump that is still settling, unless a replay or the tour owns the page. */
 export const relandJump = (): void => {
-  if (pending === null) return;
+  if (pending === null) { return; }
 
   if (document.querySelector(".overlay, .tour-layer") !== null) {
     pending = null;
@@ -35,7 +35,7 @@ export const relandJump = (): void => {
 
 /** A scroll the visitor made: it ends the jump, unless the jump itself caused it. */
 export const noteOwnScroll = (): void => {
-  if (pending !== null && scrollY !== landedY) pending = null;
+  if (pending !== null && scrollY !== landedY) { pending = null; }
 };
 
 // Growth with no message of its own — a font swapping in, a fold opening — moves a settling jump too.

@@ -7,7 +7,8 @@ import { Option, Result, Schema } from "effect";
 
 import { agentMoves, playChain } from "../src/agent/moves.ts";
 import { moveCode, nativeInput } from "../src/analysis/native-input.ts";
-import { boardOf, loadPlayer, ownLog, RELOAD_RULES, type Memo, type Reload } from "../src/analysis/player.ts";
+import { boardOf, loadPlayer, ownLog, RELOAD_RULES } from "../src/analysis/player.ts";
+import type { Memo, Reload } from "../src/analysis/player.ts";
 import { nextPrompt } from "../src/bend.ts";
 import { SeatCount } from "../src/domain.ts";
 import { begin, promptsOf } from "../src/driver.ts";
@@ -64,7 +65,7 @@ const playGame = (table: SeatCount, game: number, seed: number, chosen: Readonly
   let eligible = 0;
 
   for (let guard = 0; progress.game.pending.kind === "Choose"; guard++) {
-    if (guard > 5000) throw new Error(`seed ${seed}: the game did not end`);
+    if (guard > 5000) { throw new Error(`seed ${seed}: the game did not end`); }
 
     const prompt = Option.getOrThrow(nextPrompt(progress.game, promptsOf(progress.game)));
     const me = prompt.seat;
@@ -96,7 +97,7 @@ const playGame = (table: SeatCount, game: number, seed: number, chosen: Readonly
 
     const move = moves[index];
 
-    if (move === undefined) throw new Error(`seed ${seed}: no move at index ${index}`);
+    if (move === undefined) { throw new Error(`seed ${seed}: no move at index ${index}`); }
 
     progress = ok(playChain(progress, me, move.chain));
   }

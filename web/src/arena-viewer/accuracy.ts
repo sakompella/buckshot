@@ -39,7 +39,7 @@ export interface ScoredMove {
 export const gameAccuracy = (moves: ReadonlyArray<ScoredMove>): number | null => {
   const { length } = moves;
 
-  if (length === 0) return null;
+  if (length === 0) { return null; }
 
   const positions = [...moves.map(({ before }) => before), moves[length - 1]?.after ?? 0];
   const size = positions.length;

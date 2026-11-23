@@ -22,7 +22,8 @@ export const codeOnly = (source: string, language: Language): string => {
     const start = at++;
 
     while (source[at] !== quote) {
-      if (at >= source.length) throw unterminated("string");
+      if (at >= source.length) { throw unterminated("string"); }
+
       at += source[at] === "\\" && !sql ? 2 : 1;
     }
 
@@ -34,11 +35,12 @@ export const codeOnly = (source: string, language: Language): string => {
     let inClass = false;
 
     while (inClass || source[at] !== "/") {
-      if (at >= source.length || source[at] === "\n") throw unterminated("regular expression");
+      if (at >= source.length || source[at] === "\n") { throw unterminated("regular expression"); }
 
-      if (source[at] === "\\") at++;
-      else if (source[at] === "[") inClass = true;
-      else if (source[at] === "]") inClass = false;
+      if (source[at] === "\\") { at++; }
+      else if (source[at] === "[") { inClass = true; }
+      else if (source[at] === "]") { inClass = false; }
+
       at++;
     }
 
@@ -46,10 +48,10 @@ export const codeOnly = (source: string, language: Language): string => {
   };
 
   const template = (): string => {
-    let text = source[at++]!;
+    let text = source.charAt(at++);
 
     while (source[at] !== "`") {
-      if (at >= source.length) throw unterminated("template literal");
+      if (at >= source.length) { throw unterminated("template literal"); }
 
       if (source[at] === "\\") {
         text += source.slice(at, at + 2);
@@ -57,7 +59,7 @@ export const codeOnly = (source: string, language: Language): string => {
       } else if (source.startsWith("${", at)) {
         at += 2;
         text += `\${${tokens(true)}}`;
-      } else text += source[at++];
+      } else { text += source[at++]; }
     }
 
     at++;
@@ -79,41 +81,44 @@ export const codeOnly = (source: string, language: Language): string => {
     const previous = (): string | undefined => out.at(-1)?.trimStart();
 
     while (at < source.length) {
-      const char = source[at]!;
+      const char = source.charAt(at);
 
       if (/\s/.test(char)) {
         at++;
         gap = true;
       } else if (source.startsWith(sql ? "--" : "//", at)) {
-        while (at < source.length && source[at] !== "\n") at++;
+        while (at < source.length && source[at] !== "\n") { at++; }
+
         gap = true;
       } else if (source.startsWith("/*", at)) {
         const end = source.indexOf("*/", at + 2);
 
-        if (end < 0) throw unterminated("comment");
+        if (end < 0) { throw unterminated("comment"); }
+
         at = end + 2;
         gap = true;
-      } else if (char === "'" || char === '"') push(quoted(char));
-      else if (char === "`" && !sql) push(template());
-      else if (char === "/" && !sql && startsRegex(previous())) push(regex());
+      } else if (char === "'" || char === '"') { push(quoted(char)); }
+      else if (char === "`" && !sql) { push(template()); }
+      else if (char === "/" && !sql && startsRegex(previous())) { push(regex()); }
       else if (isWord(char)) {
         const start = at;
 
-        while (isWord(source[at])) at++;
+        while (isWord(source[at])) { at++; }
+
         push(source.slice(start, at));
       } else {
         at++;
 
-        if (inTemplate && char === "}" && depth === 0) return out.join("");
+        if (inTemplate && char === "}" && depth === 0) { return out.join(""); }
 
-        if (char === "{") depth++;
-        else if (char === "}") depth--;
+        if (char === "{") { depth++; }
+        else if (char === "}") { depth--; }
 
         push(char);
       }
     }
 
-    if (inTemplate) throw unterminated("template substitution");
+    if (inTemplate) { throw unterminated("template substitution"); }
 
     return out.join("");
   };

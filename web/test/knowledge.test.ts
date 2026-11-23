@@ -19,8 +19,10 @@ import {
   shotOf,
   stolenClue,
 } from "../src/analysis/knowledge.ts";
-import { loadPlayer, type Player } from "../src/analysis/player.ts";
-import { type Board, Briefcase, Counter, GameEvent, type Item, type LearnedSecret, type Seat, Secret, Stage } from "../src/domain.ts";
+import { loadPlayer } from "../src/analysis/player.ts";
+import type { Player } from "../src/analysis/player.ts";
+import { Briefcase, Counter, GameEvent, Secret, Stage } from "../src/domain.ts";
+import type { Board, Item, LearnedSecret, Seat } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 
 // Own-information histories with known answers: each test builds a player's log
@@ -64,8 +66,8 @@ const historyOf = (steps: ReadonlyArray<Step>) => {
   const learned: Array<LearnedSecret> = [];
 
   for (const step of steps) {
-    if ("heard" in step) learned.push({ seat: step.by ?? ME, secret: step.heard, at: events.length });
-    else events.push(step);
+    if ("heard" in step) { learned.push({ seat: step.by ?? ME, secret: step.heard, at: events.length }); }
+    else { events.push(step); }
   }
 
   return { events, learned };
@@ -98,10 +100,11 @@ test("a phone clue keeps its offset as shots remove shells, and becomes the cham
   expect(later.public.live).toEqual([1, 1]);
 });
 
+const name = (isLive: boolean): "Live" | "Blank" => (isLive ? "Live" : "Blank");
+
 test("what a player believes about the shells is never contradicted by the shells actually loaded", () => {
   hegel.test((tc) => {
     const shells = tc.draw(gs.arrays(gs.booleans(), { minSize: 2, maxSize: 8 }));
-    const name = (isLive: boolean): "Live" | "Blank" => (isLive ? "Live" : "Blank");
     const loadedShells = loaded(shells.filter(Boolean).length, shells.filter((isLive) => !isLive).length);
     const clueAt = tc.draw(gs.integers({ minValue: 2, maxValue: shells.length }));
     const firedCount = tc.draw(gs.integers({ minValue: 0, maxValue: shells.length - 1 }));
@@ -123,7 +126,7 @@ test("what a player believes about the shells is never contradicted by the shell
     expect(knowledge.private.orders).toBeGreaterThan(0);
     expect(knowledge.private.live.reduce((total, count) => total + count, 0)).toBe(knowledge.private.orders * remainingLive);
 
-    if (Option.isSome(knowledge.chamber)) expect(knowledge.chamber.value).toBe(truth);
+    if (Option.isSome(knowledge.chamber)) { expect(knowledge.chamber.value).toBe(truth); }
 
     expect(Option.isSome(knowledge.chamber) || !hasGlass).toBe(true);
   });
@@ -180,9 +183,9 @@ test("another player's clue is not in this player's belief, and an adrenaline gl
   expect(stolenClue([loaded(1, 1), used(THEM, THEM, "Glass")], 2, THEM)).toBe(false);
 });
 
-test("the ledger follows items to their use, theft, the owner's death or the round's end", () => {
-  const placed = (seat: Seat, slot: 0 | 1, item: Item) => GameEvent.cases.Placed.make({ seat, slot, item });
+const placed = (seat: Seat, slot: 0 | 1, item: Item) => GameEvent.cases.Placed.make({ seat, slot, item });
 
+test("the ledger follows items to their use, theft, the owner's death or the round's end", () => {
   const events = [
     placed(ME, 0, "Glass"),
     placed(ME, 1, "Beer"),

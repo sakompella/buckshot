@@ -59,7 +59,7 @@ let context: CanvasRenderingContext2D | null = null;
 export const measureText = (text: string, font: string): number => {
   context ??= document.createElement("canvas").getContext("2d");
 
-  if (context === null) return text.length * 6.5;
+  if (context === null) { return text.length * 6.5; }
 
   context.font = font;
 
@@ -78,7 +78,7 @@ const overlap = (a: Box, b: Box): number => {
 const orient = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => Math.sign((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
 
 const segmentsCross = (s: Segment, t: Segment): boolean => {
-  if (Math.max(s.x1, s.x2) < Math.min(t.x1, t.x2) || Math.max(t.x1, t.x2) < Math.min(s.x1, s.x2) || Math.max(s.y1, s.y2) < Math.min(t.y1, t.y2) || Math.max(t.y1, t.y2) < Math.min(s.y1, s.y2)) return false;
+  if (Math.max(s.x1, s.x2) < Math.min(t.x1, t.x2) || Math.max(t.x1, t.x2) < Math.min(s.x1, s.x2) || Math.max(s.y1, s.y2) < Math.min(t.y1, t.y2) || Math.max(t.y1, t.y2) < Math.min(s.y1, s.y2)) { return false; }
 
   const o1 = orient(s.x1, s.y1, s.x2, s.y2, t.x1, t.y1);
   const o2 = orient(s.x1, s.y1, s.x2, s.y2, t.x2, t.y2);
@@ -89,11 +89,11 @@ const segmentsCross = (s: Segment, t: Segment): boolean => {
 };
 
 const segmentHitsBox = (s: Segment, box: Box): boolean => {
-  if (Math.max(s.x1, s.x2) <= box.left || Math.min(s.x1, s.x2) >= box.right || Math.max(s.y1, s.y2) <= box.top || Math.min(s.y1, s.y2) >= box.bottom) return false;
+  if (Math.max(s.x1, s.x2) <= box.left || Math.min(s.x1, s.x2) >= box.right || Math.max(s.y1, s.y2) <= box.top || Math.min(s.y1, s.y2) >= box.bottom) { return false; }
 
   const isInside = (x: number, y: number) => x > box.left && x < box.right && y > box.top && y < box.bottom;
 
-  if (isInside(s.x1, s.y1) || isInside(s.x2, s.y2)) return true;
+  if (isInside(s.x1, s.y1) || isInside(s.x2, s.y2)) { return true; }
 
   const edges: ReadonlyArray<Segment> = [
     { x1: box.left, y1: box.top, x2: box.right, y2: box.top },
@@ -168,7 +168,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
   const current = labels.map((label): Candidate => {
     const [first] = label.candidates;
 
-    if (first === undefined) throw new Error("a label always has a first candidate");
+    if (first === undefined) { throw new Error("a label always has a first candidate"); }
 
     return first;
   });
@@ -176,7 +176,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
   const currentOf = (label: Label): Candidate => {
     const candidate = current[label.idx];
 
-    if (candidate === undefined) throw new Error(`label ${label.idx} has no current candidate`);
+    if (candidate === undefined) { throw new Error(`label ${label.idx} has no current candidate`); }
 
     return candidate;
   };
@@ -201,13 +201,13 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
       const otherBox = boxes[other.idx];
       const otherSegment = segments[other.idx];
 
-      if (other === label || other === apart || otherBox === undefined || otherSegment === undefined) return;
+      if (other === label || other === apart || otherBox === undefined || otherSegment === undefined) { return; }
 
       cost += between(box, segment, otherBox, otherSegment);
     });
 
     dots.forEach((dot, index) => {
-      if (index !== label.idx) cost += overlap(box, dot) * 6;
+      if (index !== label.idx) { cost += overlap(box, dot) * 6; }
     });
 
     return cost;
@@ -242,7 +242,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
       }
     }
 
-    if (!hasMoved) break;
+    if (!hasMoved) { break; }
   }
 
   const cheaperPair = (a: Label, b: Label): readonly [Candidate, Candidate] | null => {
@@ -276,11 +276,11 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
         const segmentA = segments[a.idx];
         const segmentB = segments[b.idx];
 
-        if (segmentA === undefined || segmentB === undefined || !segmentsCross(segmentA, segmentB)) continue;
+        if (segmentA === undefined || segmentB === undefined || !segmentsCross(segmentA, segmentB)) { continue; }
 
         const pair = cheaperPair(a, b);
 
-        if (pair === null) continue;
+        if (pair === null) { continue; }
 
         [current[a.idx], current[b.idx]] = pair;
         refresh(a);
@@ -289,7 +289,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
       }
     }
 
-    if (!hasUntangled) break;
+    if (!hasUntangled) { break; }
   }
 
   return labels.map((label) => {
@@ -304,7 +304,7 @@ export const leader = (label: Placed): Segment | null => {
   const nearX = Math.max(label.left, Math.min(label.dotX, label.left + label.w));
   const nearY = Math.max(label.y - label.h / 2, Math.min(label.dotY, label.y + label.h / 2));
 
-  if (Math.hypot(nearX - label.dotX, nearY - label.dotY) <= DOT_R + 4) return null;
+  if (Math.hypot(nearX - label.dotX, nearY - label.dotY) <= DOT_R + 4) { return null; }
 
   const angle = Math.atan2(nearY - label.dotY, nearX - label.dotX);
 
@@ -319,12 +319,12 @@ export const uncrowded = (placed: ReadonlyArray<Placed>, priority: ReadonlyArray
   for (const idx of priority) {
     const label = placed.find((candidate) => candidate.idx === idx);
 
-    if (label === undefined) continue;
+    if (label === undefined) { continue; }
 
     const box = boxOf(label, label.w, label.h);
     const isCrowded = kept.some((other) => overlap(box, other.box) > 0) || dots.some((dot, index) => placed[index]?.idx !== idx && overlap(box, dot) > 0);
 
-    if (!isCrowded) kept.push({ label, box });
+    if (!isCrowded) { kept.push({ label, box }); }
   }
 
   return kept.map(({ label }) => label);

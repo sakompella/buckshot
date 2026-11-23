@@ -7,7 +7,7 @@ import { WORKER } from "./src/deploy/worker.ts";
 // Its domain is ONLINE_DOMAIN, set with the Cloudflare variables in _work/.cloudflare-deploy.env.
 const domain = process.env.ONLINE_DOMAIN;
 
-if (domain === undefined || domain === "") throw new Error("ONLINE_DOMAIN is not set; load _work/.cloudflare-deploy.env");
+if (domain === undefined || domain === "") { throw new Error("ONLINE_DOMAIN is not set; load _work/.cloudflare-deploy.env"); }
 
 export default defineConfig({
   worker: {

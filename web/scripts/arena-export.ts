@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync, renameSync, writeFileSync } from "node
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { Effect, Schema } from "effect";
+import { Console, DateTime, Effect, Schema } from "effect";
 
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "../src/arena-viewer/aggregates.ts";
 import { openArena } from "../src/arena-viewer/load.ts";
@@ -18,13 +18,13 @@ const USAGE = "usage: bun scripts/arena-export.ts <db> --out <dir> [--regret <re
 
 const Flags = Schema.Struct({ out: Schema.String, regret: Schema.optional(Schema.String), knowledge: Schema.optional(Schema.String), "certain-mistakes": Schema.optional(Schema.String), luck: Schema.optional(Schema.String) });
 
-const usage = () => new ScriptError({ message: USAGE, exitCode: 1 });
+const usage = () => ScriptError.make({ message: USAGE, exitCode: 1 });
 
 const isMissing = (path: string | undefined) => path !== undefined && !existsSync(path);
 
 const encodeManifest = Schema.encodeSync(Schema.fromJsonString(Manifest));
 
-const ioError = (doing: string) => (cause: unknown) => new ScriptError({ message: `cannot ${doing}: ${String(cause)}`, exitCode: 1 });
+const ioError = (doing: string) => (cause: unknown) => ScriptError.make({ message: `cannot ${doing}: ${String(cause)}`, exitCode: 1 });
 
 const program = Effect.gen(function* () {
   const options = { out: { type: "string" }, regret: { type: "string" }, knowledge: { type: "string" }, "certain-mistakes": { type: "string" }, luck: { type: "string" } } as const;
@@ -39,7 +39,8 @@ const program = Effect.gen(function* () {
     Effect.scoped,
   );
 
-  const generated = new Date().toISOString().slice(0, 10);
+  const now = yield* DateTime.now;
+  const generated = DateTime.formatIso(now).slice(0, 10);
   const manifest = encodeManifest({ generated, files: AGGREGATE_NAMES.map((name) => ({ name, bytes: Buffer.byteLength(json[name]) })) });
   const files = new Map<string, string>([...AGGREGATE_NAMES.map((name) => [name, json[name]] as const), ["manifest", manifest]]);
   const target = resolve(out);
@@ -50,17 +51,17 @@ const program = Effect.gen(function* () {
     (dir) => Effect.sync(() => { rmSync(dir, { recursive: true, force: true }); }),
   );
 
-  yield* Effect.try({ try: () => { for (const [name, text] of files) writeFileSync(join(staging, `${name}.json`), text); }, catch: ioError(`write ${staging}`) });
+  yield* Effect.try({ try: () => { for (const [name, text] of files) { writeFileSync(join(staging, `${name}.json`), text); } }, catch: ioError(`write ${staging}`) });
 
   const violations = privacyViolations(files);
 
-  yield* violations.length === 0 ? Effect.void : new ScriptError({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 });
+  yield* violations.length === 0 ? Effect.void : ScriptError.make({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 });
 
   yield* Effect.try({ try: () => { rmSync(target, { recursive: true, force: true }); renameSync(staging, target); }, catch: ioError(`replace ${target}`) });
 
-  for (const [name, text] of files) console.log(`${`${name}.json`.padEnd(18)} ${String(Buffer.byteLength(text)).padStart(9)} B  ${String(Bun.gzipSync(text).length).padStart(8)} B gzipped`);
+  for (const [name, text] of files) { yield* Console.log(`${`${name}.json`.padEnd(18)} ${String(Buffer.byteLength(text)).padStart(9)} B  ${String(Bun.gzipSync(text).length).padStart(8)} B gzipped`); }
 
-  console.log(`wrote ${files.size} files to ${target}`);
+  yield* Console.log(`wrote ${files.size} files to ${target}`);
 }).pipe(Effect.scoped);
 
 await runMain(program);

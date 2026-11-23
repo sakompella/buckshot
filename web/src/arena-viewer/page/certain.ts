@@ -1,11 +1,14 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
+import { CERTAIN_TYPES } from "../api.ts";
+import type { CertainMistakes, CertainRate, CertainType, OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtShare, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtShare, fmtTime, groupBy, keyOf, labelOf, shortName, sumOf } from "./data.ts";
+import type { MatchRow, SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
-import { type CertainCell, Message } from "./model.ts";
+import { Message } from "./model.ts";
+import type { CertainCell } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -47,11 +50,12 @@ const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: Cer
 const inStrengthOrder = <A extends { readonly model: string; readonly effort: string }>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
   items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || byEffort(left.effort, right.effort));
 
+const ofType = (own: ReadonlyArray<CertainRate>, type: OpportunityType) => own.filter((rate) => rate.type === type);
+
 /** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. */
 export const talliesOf = memoLast((rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>): Tallies => {
   const configs = rates.filter(({ scope }) => scope === "config");
   const shown = configs.filter((rate) => kept.has(keyOf(rate)));
-  const ofType = (own: ReadonlyArray<CertainRate>, type: OpportunityType) => own.filter((rate) => rate.type === type);
   const writtenOf = (scope: CertainRate["scope"], model: string, type: OpportunityType) => rates.find((rate) => rate.scope === scope && rate.model === model && rate.type === type);
   const modelNames = [...new Set(shown.map(({ model }) => model))].toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const blanks = ofType(shown, "gave_turn_away");
@@ -134,7 +138,7 @@ const intervalView = (h: H, cell: Cell): Html => h.span([h.Class("pm")], [fmtBou
 const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpen: boolean } | null): Html => {
   const label = h.DataAttribute("label", CERTAIN_NAMES[cell.type]);
 
-  if (cell.opportunities === 0) return h.td([label], ["–"]);
+  if (cell.opportunities === 0) { return h.td([label], ["–"]); }
 
   const counts = `${cell.mistakes.toLocaleString()} / ${cell.opportunities.toLocaleString()}`;
 
@@ -216,6 +220,8 @@ const BOTTOM = 26;
 
 const stepOf = (most: number): number => [0.005, 0.01, 0.02, 0.05, 0.1].find((step) => most / step <= 5) ?? 0.2;
 
+const tickLabel = (value: number) => `${+(value * 100).toFixed(1)}%`;
+
 const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: Cell, width: number): Html => {
   const isNarrow = width < 420;
   const [left, right] = isNarrow ? [78, 78] : [96, 92];
@@ -227,7 +233,6 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_tick, index) => index * step);
   const x = linScale(0, top, left, width - right, ticks);
   const height = TOP + models.length * ROW + BOTTOM;
-  const tickLabel = (value: number) => `${+(value * 100).toFixed(1)}%`;
 
   return h.svg(
     [h.Width(String(width)), h.Height(String(height))],

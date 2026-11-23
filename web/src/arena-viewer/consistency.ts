@@ -21,6 +21,8 @@ export interface Repeat {
   readonly block: string;
 }
 
+const idOf = (ids: Map<string, number>, value: string) => ids.get(value) ?? (ids.set(value, ids.size), ids.size - 1);
+
 /**
  * One config's repeated positions, and the seed blocks of all its decisions, which a resample draws from. Every position weighs the same, so the few positions every match opens with do not
  * drown the rest. The interval is a 95% percentile bootstrap that resamples seed blocks. Within a resample a pair of
@@ -29,15 +31,14 @@ export interface Repeat {
  */
 export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, everyBlock: Iterable<string> = positions.flat().map(({ block }) => block)): Pick<Consistency, "positions" | "agree" | "lo" | "hi"> => {
   const blockIds = new Map<string, number>();
-  const idOf = (ids: Map<string, number>, value: string) => ids.get(value) ?? (ids.set(value, ids.size), ids.size - 1);
 
-  for (const block of everyBlock) idOf(blockIds, block);
+  for (const block of everyBlock) { idOf(blockIds, block); }
 
   // Every decision in one run, each position's from its start to the next one's; a choice is numbered within its position.
   const decisions = positions.flat();
   const starts = new Int32Array(positions.length + 1);
 
-  for (const [index, repeats] of positions.entries()) starts[index + 1] = (starts[index] ?? 0) + repeats.length;
+  for (const [index, repeats] of positions.entries()) { starts[index + 1] = (starts[index] ?? 0) + repeats.length; }
 
   const blocks = Int32Array.from(decisions, ({ block }) => idOf(blockIds, block));
 

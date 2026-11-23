@@ -1,4 +1,4 @@
-import { Data, Redacted, Result, Schema } from "effect";
+import { Redacted, Result, Schema } from "effect";
 
 import { AgentId, EngineSeat } from "./agent.ts";
 import type { PriceTable } from "./cost.ts";
@@ -45,9 +45,9 @@ type Entrant = TournamentConfig["entrants"][string];
 
 type ModelEntrant = typeof ModelEntrant.Type;
 
-export class TournamentError extends Data.TaggedError("TournamentError")<{ readonly message: string }> {}
+export class TournamentError extends Schema.TaggedError<TournamentError>()("TournamentError", { message: Schema.String }) {}
 
-const fail = (message: string) => Result.fail(new TournamentError({ message }));
+const fail = (message: string) => Result.fail(TournamentError.make({ message }));
 
 /** An entrant name, as the pairings and the match directories use it. */
 export type EntrantName = typeof EntrantName.Type;
@@ -84,13 +84,13 @@ const explicitPairings = (config: TournamentConfig, listed: ReadonlyArray<Pairin
       const stranger = unknownIn(config, pairing);
       const twice = duplicateIn(pairing);
 
-      if (stranger !== undefined) return yield* fail(`${label} names the unknown entrant "${stranger}"`);
+      if (stranger !== undefined) { return yield* fail(`${label} names the unknown entrant "${stranger}"`); }
 
-      if (twice !== undefined) return yield* fail(`${label} lists the entrant "${twice}" twice`);
+      if (twice !== undefined) { return yield* fail(`${label} lists the entrant "${twice}" twice`); }
 
-      if (pairing.length < 2 || pairing.length > 4) return yield* fail(`${label} has ${pairing.length} entrants; a pairing has 2 to 4`);
+      if (pairing.length < 2 || pairing.length > 4) { return yield* fail(`${label} has ${pairing.length} entrants; a pairing has 2 to 4`); }
 
-      if (!hasModel(config, pairing)) return yield* fail(`${label} has only bots; a pairing needs at least one model or engine entrant`);
+      if (!hasModel(config, pairing)) { return yield* fail(`${label} has only bots; a pairing needs at least one model or engine entrant`); }
     }
 
     return listed;
@@ -101,11 +101,11 @@ const allOfPairings = (config: TournamentConfig, allOf: ReadonlyArray<EntrantNam
   const stranger = unknownIn(config, allOf);
   const twice = duplicateIn(allOf);
 
-  if (stranger !== undefined) return fail(`allOf names the unknown entrant "${stranger}"`);
+  if (stranger !== undefined) { return fail(`allOf names the unknown entrant "${stranger}"`); }
 
-  if (twice !== undefined) return fail(`allOf lists the entrant "${twice}" twice`);
+  if (twice !== undefined) { return fail(`allOf lists the entrant "${twice}" twice`); }
 
-  if (allOf.length < size) return fail(`allOf has ${allOf.length} entrants, fewer than its size ${size}`);
+  if (allOf.length < size) { return fail(`allOf has ${allOf.length} entrants, fewer than its size ${size}`); }
 
   return Result.succeed(combinations(allOf, size).filter((pairing) => hasModel(config, pairing)));
 };
@@ -143,24 +143,24 @@ export interface Tournament {
 export const resolveConfig = (config: TournamentConfig): Result.Result<Tournament, TournamentError> =>
   Result.gen(function* () {
     for (const [name, entrant] of Object.entries(config.entrants)) {
-      if (isModel(entrant) && config.endpoints[entrant.endpoint] === undefined) return yield* fail(`entrant "${name}" uses the unknown endpoint "${entrant.endpoint}"`);
+      if (isModel(entrant) && config.endpoints[entrant.endpoint] === undefined) { return yield* fail(`entrant "${name}" uses the unknown endpoint "${entrant.endpoint}"`); }
     }
 
     const seeded = yield* seededPairingsOf(config);
     const pairings = seeded.map(([pairing]) => pairing);
     const repeated = duplicateIn(pairings.map((pairing) => pairing.join(",")));
 
-    if (repeated !== undefined) return yield* fail(`the pairing (${repeated}) is listed twice`);
+    if (repeated !== undefined) { return yield* fail(`the pairing (${repeated}) is listed twice`); }
 
     for (const [index, [pairing, seeds]] of seeded.entries()) {
       const label = `pairing ${index + 1} (${pairing.join(", ")})`;
       const twice = duplicateIn(seeds.map(String));
 
-      if (seeds.length < config.blocksPerPairing) return yield* fail(`${label} lists ${seeds.length} seeds for ${config.blocksPerPairing} blocks`);
+      if (seeds.length < config.blocksPerPairing) { return yield* fail(`${label} lists ${seeds.length} seeds for ${config.blocksPerPairing} blocks`); }
 
-      if (twice !== undefined) return yield* fail(`${label} lists the seed ${twice} twice`);
+      if (twice !== undefined) { return yield* fail(`${label} lists the seed ${twice} twice`); }
 
-      if (pairing.length > 2 && pairing.some((name) => "engine" in (config.entrants[name] ?? {}))) return yield* fail(`${label} seats an engine at a table of ${pairing.length}; the engine's seats-2 build (engine.ts) plays two-seat tables only`);
+      if (pairing.length > 2 && pairing.some((name) => "engine" in (config.entrants[name] ?? {}))) { return yield* fail(`${label} seats an engine at a table of ${pairing.length}; the engine's seats-2 build (engine.ts) plays two-seat tables only`); }
     }
 
     return { config, pairings, seeds: seeded.map(([, seeds]) => seeds) };
@@ -169,7 +169,7 @@ export const resolveConfig = (config: TournamentConfig): Result.Result<Tournamen
 /** Decodes a config from its JSON text. A mistyped key is an error, and so is a name that points at nothing. */
 export const parseConfig = (text: string): Result.Result<Tournament, TournamentError> =>
   Result.flatMap(
-    Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentConfig))(text, { onExcessProperty: "error" }), (error) => new TournamentError({ message: `the config is not valid: ${error.message}` })),
+    Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentConfig))(text, { onExcessProperty: "error" }), (error) => TournamentError.make({ message: `the config is not valid: ${error.message}` })),
     resolveConfig,
   );
 
@@ -209,7 +209,7 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
   const seated = pairing.flatMap((name): ReadonlyArray<readonly [Seat, EntrantName]> => {
     const entrant = config.entrants[name];
 
-    if (entrant === undefined) return [];
+    if (entrant === undefined) { return []; }
 
     if (isModel(entrant)) {
       const letter = letters.next().value;
@@ -274,11 +274,11 @@ export const assignAccounts = (
     const entrant = modelEntrant(config, name);
     const accounts = endpointOf(config, name)?.accounts;
 
-    if (entrant === undefined || accounts === undefined) continue;
+    if (entrant === undefined || accounts === undefined) { continue; }
 
     const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => running(a) - running(b) || rank(a) - rank(b))[0];
 
-    if (account === undefined) return undefined;
+    if (account === undefined) { return undefined; }
 
     assigned[seat] = account;
   }
@@ -292,7 +292,7 @@ export const resolveKeys = (config: TournamentConfig, schedule: ReadonlyArray<Sc
 
   const missing = variables.filter((variable) => (env[variable] ?? "") === "");
 
-  if (missing.length > 0) return fail(`set ${missing.join(", ")} in the environment or in web/.env: ${missing.length > 1 ? "they hold" : "it holds"} the key of an endpoint this tournament uses`);
+  if (missing.length > 0) { return fail(`set ${missing.join(", ")} in the environment or in web/.env: ${missing.length > 1 ? "they hold" : "it holds"} the key of an endpoint this tournament uses`); }
 
   return Result.succeed(new Map(variables.map((variable) => [variable, Redacted.make(env[variable] ?? "")] as const)));
 };
@@ -316,7 +316,7 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
     const endpoint = endpointOf(config, match.entrants[index] ?? "");
     const key = keys.get(endpoint?.keyEnv ?? "");
 
-    if (entrant === undefined || endpoint === undefined || key === undefined) return [];
+    if (entrant === undefined || endpoint === undefined || key === undefined) { return []; }
 
     const prefix = `PLAYER_${seat}_`;
     const api = endpoint.api === "anthropic" ? "ANT" : "OAI";
@@ -327,17 +327,17 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
       [`${prefix}MODEL`, entrant.model],
     ];
 
-    if (entrant.catalogModel !== undefined) variables.push([`${prefix}CATALOG_MODEL`, entrant.catalogModel]);
+    if (entrant.catalogModel !== undefined) { variables.push([`${prefix}CATALOG_MODEL`, entrant.catalogModel]); }
 
     variables.push([`${prefix}EFFORT`, entrant.effort]);
 
-    if (entrant.instructionsAddendum !== undefined) variables.push([`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]);
+    if (entrant.instructionsAddendum !== undefined) { variables.push([`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]); }
 
-    if (entrant.effortLabel !== undefined) variables.push([`${prefix}EFFORT_LABEL`, entrant.effortLabel]);
+    if (entrant.effortLabel !== undefined) { variables.push([`${prefix}EFFORT_LABEL`, entrant.effortLabel]); }
 
     const account = accounts[seat];
 
-    if (account !== undefined) variables.push([`${prefix}ACCOUNT_ID`, account]);
+    if (account !== undefined) { variables.push([`${prefix}ACCOUNT_ID`, account]); }
 
     return variables;
   });

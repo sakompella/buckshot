@@ -1,10 +1,14 @@
 import { Array as Arr, Option, Result } from "effect";
 
-import { type Board, Briefcase, Counter, GameEvent, type Seat, type SeatView, Secret } from "../domain.ts";
-import { type Controller, controllerOf, type Progress, promptsOf } from "../driver.ts";
-import { type Assignment, type Letter, type Player, playerName, type Roster, rosterOf } from "../players.ts";
+import { Briefcase, Counter, GameEvent, Secret } from "../domain.ts";
+import type { Board, Seat, SeatView } from "../domain.ts";
+import { controllerOf, promptsOf } from "../driver.ts";
+import type { Controller, Progress } from "../driver.ts";
+import { playerName, rosterOf } from "../players.ts";
+import type { Assignment, Letter, Player, Roster } from "../players.ts";
 import { describeError, eventText, itemName, secretText } from "../text.ts";
-import { agentMoves, type Chain } from "./moves.ts";
+import { agentMoves } from "./moves.ts";
+import type { Chain } from "./moves.ts";
 
 // An Agent player's view and move checks. Every call names an Agent player and
 // sees only what that player's screen shows: the board on the player's turn, the
@@ -135,9 +139,9 @@ export const agentGame = (source: AgentSource, turn: number, letter: Letter): Re
   return Result.flatMap(agentPlayer(source, roster, letter), ({ seat }): Result.Result<AgentGame, string> => {
     const { board, pending } = source.game;
 
-    if (pending.kind === "Finished") return Result.succeed({ you: letter, status: "over", standings: standingsOf(board, roster), events: eventsSinceLastTurn(source, roster, seat) });
+    if (pending.kind === "Finished") { return Result.succeed({ you: letter, status: "over", standings: standingsOf(board, roster), events: eventsSinceLastTurn(source, roster, seat) }); }
 
-    if (!hasTurn(source, seat)) return Result.succeed({ you: letter, status: "waiting" });
+    if (!hasTurn(source, seat)) { return Result.succeed({ you: letter, status: "waiting" }); }
 
     return Result.mapBoth(agentMoves(source, roster, seat), {
       onFailure: (error) => describeError(roster, error),
@@ -166,9 +170,9 @@ export const agentMove = (source: AgentSource, turn: number, letter: Letter, mov
 
   return Result.flatMap(agentPlayer(source, roster, letter), ({ seat }) =>
     Result.gen(function* () {
-      if (!hasTurn(source, seat)) return yield* Result.fail('It is not your turn. Call get_game and wait until status is "your turn".');
+      if (!hasTurn(source, seat)) { return yield* Result.fail('It is not your turn. Call get_game and wait until status is "your turn".'); }
 
-      if (given !== turn) return yield* Result.fail(`Stale move: this is turn ${turn}, not ${given}. Call get_game for the current moves.`);
+      if (given !== turn) { return yield* Result.fail(`Stale move: this is turn ${turn}, not ${given}. Call get_game for the current moves.`); }
 
       const moves = yield* Result.mapError(agentMoves(source, roster, seat), (error) => describeError(roster, error));
       const chosen = yield* Result.fromOption(Arr.get(moves, move), () => `There is no move ${move}. Legal moves are 0 to ${moves.length - 1}.`);

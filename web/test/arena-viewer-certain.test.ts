@@ -36,11 +36,11 @@ const opportunitiesFile = (): string => {
 
   const insert = db.query("insert into opportunities values (?, ?, ?, ?, ?, 'public')");
 
-  for (const row of OPPORTUNITIES) insert.run(...row);
+  for (const row of OPPORTUNITIES) { insert.run(...row); }
 
   const insertRate = db.query("insert into rates values (?, ?, ?, ?, ?, ?, ?, ?)");
 
-  for (const row of WRITTEN_RATES) insertRate.run(...row);
+  for (const row of WRITTEN_RATES) { insertRate.run(...row); }
 
   db.close();
 
@@ -145,8 +145,9 @@ test("proven blanks that gave the turn away, and decisions a jammed opponent hid
   expect(hiddenHealth).toBe(7);
 });
 
+const seatsOver = (blocks: number) => CONFIGS.flatMap((config) => Array.from({ length: blocks }, (_, block) => ({ ...config, seedBlock: `block${block}`, status: "completed" as const })));
+
 test("the export keeps a config's, model's or pool's interval only over 4 or more seed blocks", () => {
-  const seatsOver = (blocks: number) => CONFIGS.flatMap((config) => Array.from({ length: blocks }, (_, block) => ({ ...config, seedBlock: `block${block}`, status: "completed" as const })));
   const boundsOver = (blocks: number) => thresholdedCertain(certainOf(WRITTEN).rates, seatsOver(blocks)).map(({ bounds }) => bounds?.hi ?? null);
 
   expect(boundsOver(3)).toEqual(WRITTEN.map(() => null));

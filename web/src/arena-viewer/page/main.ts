@@ -1,33 +1,49 @@
-import { Data, Effect, Option, Predicate, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Predicate, Schema, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { AsyncData, Command, Dom, Http, Subscription, type Update } from "foldkit";
+import { AsyncData, Command, Dom, Http, Subscription } from "foldkit";
+import type { Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
 import { aggregateUrl, isOnline } from "../../site/online.ts";
-import { type ArenaRoute, arenaHref, arenaStateOf } from "../../site/route.ts";
+import { arenaHref, arenaStateOf } from "../../site/route.ts";
+import type { ArenaRoute } from "../../site/route.ts";
 import { AGGREGATES } from "../aggregates.ts";
 import { CertainMistakes, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { relandJump, noteOwnScroll, scrollToTarget } from "./jump.ts";
-import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
+import { Group, GROUPS, LoadFailure, Message, MOVED_TARGETS, Target } from "./model.ts";
+import type { Filter, Lazy, LazyName, Model, Viewport } from "./model.ts";
 import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
 import { stickyHeight } from "./view.ts";
 
-type Return = Update.Return<Model, Message>;
+/** What the page's commands fetch with: a service of its own, so that the update's type does not carry the HTTP library's. */
+class Fetch extends Context.Service<Fetch, { readonly json: (url: string) => Effect.Effect<unknown, Error> }>()("buckshot-web/arena-viewer/page/main/Fetch") {}
+
+export type Resources = Fetch;
+
+type Return = Update.Return<Model, Message, Resources>;
 
 const describe = (error: { readonly message: string }) => error.message;
 
 /** No arena server answers: a static build of the site, whose host sends a 404 or the page itself for `/api/...`. */
-class NoArenaServer extends Data.TaggedError("NoArenaServer") {}
+class NoArenaServer extends Schema.TaggedError<NoArenaServer>()("NoArenaServer", {}) {}
 
 const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
-  HttpClient.get(url).pipe(
-    Effect.filterOrFail((response) => response.status !== 404 && (response.headers["content-type"] ?? "").includes("json"), () => new NoArenaServer()),
-    Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.flatMap((response) => response.json),
-    Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)),
-  );
+  Effect.flatMap(Fetch, ({ json }) => json(url)).pipe(Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)));
+
+/** The layer an application gives the page's commands: the browser's `fetch`. */
+export const fetchLayer = Layer.effect(
+  Fetch,
+  Effect.map(HttpClient.HttpClient, (client) => ({
+    json: (url: string) =>
+      client.get(url).pipe(
+        Effect.filterOrFail((response) => response.status !== 404 && (response.headers["content-type"] ?? "").includes("json"), () => NoArenaServer.make()),
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap((response) => response.json),
+      ),
+  })),
+).pipe(Layer.provide(Http.layer));
 
 const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
   getJson(url, schema).pipe(
@@ -39,8 +55,7 @@ const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
   execute: Effect.all([getJson(aggregateUrl("summary"), AGGREGATES.summary), getJson(aggregateUrl("pairs"), AGGREGATES.pairs)], { concurrency: 2 }).pipe(
     Effect.map(([summary, pairs]) => Message.SucceededLoad({ loaded: { summary, pairs } })),
-    Effect.catch((error) => Effect.succeed(Message.FailedLoad({ failure: error instanceof NoArenaServer ? LoadFailure.NoServer() : LoadFailure.Failed({ error: describe(error) }) }))),
-    Effect.provide(Http.layer),
+    Effect.catch((error) => Effect.succeed(Message.FailedLoad({ failure: Schema.is(NoArenaServer)(error) ? LoadFailure.NoServer() : LoadFailure.Failed({ error: describe(error) }) }))),
   ),
 });
 
@@ -48,17 +63,17 @@ const lazyFailure = (name: LazyName) => (error: { readonly message: string }) =>
 
 const LoadItems = Command.define("LoadItems", {
   messages: [Message.SucceededItems, Message.FailedLazy],
-  execute: getJson(aggregateUrl("items"), AGGREGATES.items).pipe(Effect.map((items) => Message.SucceededItems({ items })), Effect.catch(lazyFailure("items")), Effect.provide(Http.layer)),
+  execute: getJson(aggregateUrl("items"), AGGREGATES.items).pipe(Effect.map((items) => Message.SucceededItems({ items })), Effect.catch(lazyFailure("items"))),
 });
 
 const LoadOdds = Command.define("LoadOdds", {
   messages: [Message.SucceededOdds, Message.FailedLazy],
-  execute: getJson(aggregateUrl("odds"), AGGREGATES.odds).pipe(Effect.map((odds) => Message.SucceededOdds({ odds })), Effect.catch(lazyFailure("odds")), Effect.provide(Http.layer)),
+  execute: getJson(aggregateUrl("odds"), AGGREGATES.odds).pipe(Effect.map((odds) => Message.SucceededOdds({ odds })), Effect.catch(lazyFailure("odds"))),
 });
 
 const LoadCertain = Command.define("LoadCertain", {
   messages: [Message.SucceededCertain, Message.FailedLazy],
-  execute: getJson(aggregateUrl("certain"), AGGREGATES.certain).pipe(Effect.map((certain) => Message.SucceededCertain({ certain })), Effect.catch(lazyFailure("certain")), Effect.provide(Http.layer)),
+  execute: getJson(aggregateUrl("certain"), AGGREGATES.certain).pipe(Effect.map((certain) => Message.SucceededCertain({ certain })), Effect.catch(lazyFailure("certain"))),
 });
 
 const LoadConsistency = Command.define("LoadConsistency", {
@@ -66,7 +81,6 @@ const LoadConsistency = Command.define("LoadConsistency", {
   execute: getJson(aggregateUrl("consistency"), AGGREGATES.consistency).pipe(
     Effect.map((consistency) => Message.SucceededConsistency({ consistency })),
     Effect.catch(lazyFailure("consistency")),
-    Effect.provide(Http.layer),
   ),
 });
 
@@ -77,7 +91,6 @@ const LoadLocal = Command.define("LoadLocal", {
   execute: Effect.all([getJson("/api/seats", SeatsResponse), getOptional("/api/certain-mistakes", CertainMistakes)], { concurrency: 2 }).pipe(
     Effect.map(([seats, certainMoves]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), certainMoves } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLocal({ error: describe(error) }))),
-    Effect.provide(Http.layer),
   ),
 });
 
@@ -103,7 +116,7 @@ const withNeeds = (model: Model, needs: ReadonlyArray<Need>): Return => {
   const lazy = needs.filter((need): need is LazyName => need !== "local" && Predicate.isTagged(model.lazy[need], "Idle"));
   const isLocalNeeded = !isOnline && needs.includes("local") && AsyncData.isIdle(model.local);
 
-  if (lazy.length === 0 && !isLocalNeeded) return { model };
+  if (lazy.length === 0 && !isLocalNeeded) { return { model }; }
 
   return {
     model: modifyFields(model, {
@@ -155,7 +168,7 @@ const RevealNavLink = Command.define("RevealNavLink", {
       const nav = document.querySelector("main nav");
       const link = nav?.querySelector(`a[href="#${group}"]`);
 
-      if (nav instanceof HTMLElement && link instanceof HTMLElement) nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" });
+      if (nav instanceof HTMLElement && link instanceof HTMLElement) { nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" }); }
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
@@ -329,7 +342,7 @@ export const update = (model: Model, message: Message): Return =>
           const steps = tourOf(tour.hasCertain);
           const step = Math.max(0, Math.min(steps.length - 1, tour.step + delta));
 
-          if (step === tour.step) return { model };
+          if (step === tour.step) { return { model }; }
 
           return { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
         },
@@ -381,12 +394,12 @@ export const viewportNow = (): Viewport => ({ width: document.documentElement.cl
 
 // Controls answer a tap themselves; a tap anywhere else shows the nearest heat cell's data-tip, or clears the one shown.
 const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
-  if (event.pointerType !== "touch" || !(event.target instanceof Element) || event.target.closest("button, a, select, input, label, summary, [role=button], .tip") !== null) return Option.none();
+  if (event.pointerType !== "touch" || !(event.target instanceof Element) || event.target.closest("button, a, select, input, label, summary, [role=button], .tip") !== null) { return Option.none(); }
 
   for (let element: Element | null = event.target; element !== null; element = element.parentElement) {
     const text = element.getAttribute("data-tip");
 
-    if (text !== null && text !== "") return Option.some(Message.TappedTitle({ text }));
+    if (text !== null && text !== "") { return Option.some(Message.TappedTitle({ text })); }
   }
 
   return Option.some(Message.ClearedTappedTitle());

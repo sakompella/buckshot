@@ -43,7 +43,7 @@ const EVERY_GROUP: ReadonlyArray<{ readonly group: Group; readonly label: string
 /** The groups this build draws: the online one has no matches, which need per-match data. */
 export const GROUPS = isOnline ? EVERY_GROUP.filter(({ group }) => group !== "watch") : EVERY_GROUP;
 
-export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
+export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Finite) });
 
 /** An optional section's data, or why it could not be loaded: its failure leaves the rest of the page standing. */
 const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(schema, Schema.String).schema;
@@ -101,23 +101,23 @@ export const MatchPreset = Schema.Literals(["comebacks", "upsets"]);
 
 export type MatchPreset = typeof MatchPreset.Type;
 
-export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number, maybePreset: Schema.Option(MatchPreset) });
+export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Finite, maybePreset: Schema.Option(MatchPreset) });
 
 /** A chart mark's tip: the id of the mark it points at, and what the mark means with its sample size. */
 export const MarkTip = Schema.Struct({ anchor: Schema.String, text: Schema.String });
 
 export type MarkTip = typeof MarkTip.Type;
 
-export const TourBox = Schema.Struct({ top: Schema.Number, left: Schema.Number, width: Schema.Number, height: Schema.Number });
+export const TourBox = Schema.Struct({ top: Schema.Finite, left: Schema.Finite, width: Schema.Finite, height: Schema.Finite });
 
 export type TourBox = typeof TourBox.Type;
 
 /** The open tour: the step shown (an index into the steps tour.ts gives for `hasCertain`) and, once measured, its highlight and whether the card fits just under it. */
-export const Tour = Schema.Struct({ step: Schema.Number, hasCertain: Schema.Boolean, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
+export const Tour = Schema.Struct({ step: Schema.Finite, hasCertain: Schema.Boolean, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
 
 export type Tour = typeof Tour.Type;
 
-export const Viewport = Schema.Struct({ width: Schema.Number, height: Schema.Number });
+export const Viewport = Schema.Struct({ width: Schema.Finite, height: Schema.Finite });
 
 export type Viewport = typeof Viewport.Type;
 
@@ -152,7 +152,7 @@ export const Model = Schema.Struct({
 export type Model = typeof Model.Type;
 
 export const Message = defineMessageUnion({
-  ResizedViewport: { width: Schema.Number, height: Schema.Number },
+  ResizedViewport: { width: Schema.Finite, height: Schema.Finite },
   ClickedJump: { target: Target },
   NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
@@ -194,9 +194,9 @@ export const Message = defineMessageUnion({
   CompletedScroll: {},
   CompletedFirstPaint: {},
   ClickedTour: {},
-  SteppedTour: { delta: Schema.Number },
+  SteppedTour: { delta: Schema.Finite },
   ClosedTour: {},
-  PlacedTour: { step: Schema.Number, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean },
+  PlacedTour: { step: Schema.Finite, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean },
 });
 
 export type Message = typeof Message.Type;

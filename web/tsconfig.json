@@ -20,13 +20,51 @@
         "name": "@effect/language-service",
         // Suggestions fail typecheck too: every rule on by default is enforced.
         "ignoreEffectSuggestionsInTscExitCode": false,
-        // The site's fetch client; Effect 4 marks it unstable.
-        "allowedUnstableApis": ["effect/http/HttpClient", "effect/http/HttpClientResponse"],
+        // The site's and the deploy script's fetch client; Effect 4 marks it unstable.
+        "allowedUnstableApis": ["effect/http/HttpClient", "effect/http/HttpClientResponse", "effect/http/HttpClientRequest", "effect/http/FetchHttpClient"],
+        // Rules off by default are turned on here, except the Effect style rules this code does not follow (preferEffectArray, globalJson, asyncFunction, ...).
         "diagnosticSeverity": {
-          // Off: 218 hits, and the numbers come from JSON, which cannot carry NaN or Infinity.
-          "schemaNumber": "off",
-          // On (off by default): Effect.forEach is sequential unless said otherwise.
-          "missingConcurrencyOption": "warning"
+          "anyUnknownInErrorContext": "error",
+          "apiStabilityLeak": "error",
+          "cryptoRandomUUID": "error",
+          "cryptoRandomUUIDInEffect": "error",
+          "deterministicKeys": "error",
+          "effectDoNotation": "error",
+          "effectTryWithoutCatch": "error",
+          "extendsNativeError": "error",
+          "forLoopPushToForEach": "error",
+          "globalConsoleInEffect": "error",
+          "globalDateInEffect": "error",
+          "globalFetch": "error",
+          "globalFetchInEffect": "error",
+          "globalJsonInEffect": "error",
+          "globalRandom": "error",
+          "globalRandomInEffect": "error",
+          "globalTimers": "error",
+          "globalTimersInEffect": "error",
+          "instanceOfSchema": "error",
+          "mapMapErrorToMapBoth": "error",
+          "missedPipeableOpportunity": "error",
+          "missingConcurrencyOption": "error",
+          "missingEffectServiceDependency": "error",
+          "nestedEffectGenYield": "error",
+          "newPromise": "error",
+          "newSchemaClass": "error",
+          "preferBarrelImport": "error",
+          "preferNamespaceImport": "error",
+          "preferSchemaTaggedError": "error",
+          "preferSchemaTypeProperty": "error",
+          "processEnvInEffect": "error",
+          "promiseAllInEffect": "error",
+          "promiseRaceInEffect": "error",
+          "provideMergeAllToArray": "error",
+          "schemaUnionOfLiterals": "error",
+          "serviceNotAsClass": "error",
+          "strictEffectProvide": "error",
+          "typeUnionToSchemaUnion": "error",
+          "unnecessaryArrowBlock": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "yieldInCallArgument": "error"
         }
       }
     ]

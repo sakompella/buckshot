@@ -29,7 +29,7 @@ export const logScale = (d0: number, d1: number, r0: number, r1: number): Scale 
     for (const step of [1, 2, 5]) {
       const value = Number((step * 10 ** exponent).toPrecision(3));
 
-      if (value >= d0 * 0.999 && value <= d1 * 1.001) ticks.push(value);
+      if (value >= d0 * 0.999 && value <= d1 * 1.001) { ticks.push(value); }
     }
   }
 

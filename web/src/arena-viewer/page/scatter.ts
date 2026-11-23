@@ -4,8 +4,10 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
 import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isFixedPlayer, isProvisional, reasoningPerMove } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
-import { memoLast, type ModelStats } from "./derived.ts";
-import { Message, type Model, type ScatterAxis } from "./model.ts";
+import { memoLast } from "./derived.ts";
+import type { ModelStats } from "./derived.ts";
+import { Message } from "./model.ts";
+import type { Model, ScatterAxis } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -46,7 +48,7 @@ const nearerHalf = (cell: ReadonlyArray<Spot>, own: Spot, other: Spot): Readonly
     const [a, b] = [side(from), side(to)];
     const kept = a <= 0 ? [from] : [];
 
-    if ((a <= 0) === (b <= 0)) return kept;
+    if ((a <= 0) === (b <= 0)) { return kept; }
 
     const t = a / (a - b);
 
@@ -143,7 +145,7 @@ export const frontierOf = (points: ReadonlyArray<Point>) => {
 const stepPast = (value: number, direction: "down" | "up"): number => {
   const steps: Array<number> = [];
 
-  for (let exponent = Math.floor(Math.log10(value)) - 1; exponent <= Math.ceil(Math.log10(value)) + 1; exponent++) for (const step of [1, 2, 5]) steps.push(Number((step * 10 ** exponent).toPrecision(3)));
+  for (let exponent = Math.floor(Math.log10(value)) - 1; exponent <= Math.ceil(Math.log10(value)) + 1; exponent++) { for (const step of [1, 2, 5]) {steps.push(Number((step * 10 ** exponent).toPrecision(3))); }}
 
   return direction === "down" ? (steps.findLast((step) => step < value) ?? value) : (steps.find((step) => step > value) ?? value);
 };
@@ -165,7 +167,7 @@ const pointsOf = memoLast(
   (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): Readonly<Record<ScatterAxis, ReadonlyArray<Point>>> => {
     const on = (axis: ScatterAxis): ReadonlyArray<Point> =>
       stats.flatMap((m) => {
-        if (isFixedPlayer(m.model)) return [];
+        if (isFixedPlayer(m.model)) { return []; }
 
         const rating = ratings.get(m.key)?.rating;
         const rank = ranks.get(m.key);
@@ -199,14 +201,15 @@ interface Domain {
   readonly elo: readonly [number, number];
 }
 
+const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
+
 const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): Domain => {
   const rated = every.filter((m) => m.scored > 0 && ratings.has(m.key));
-  const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
 
   const xOf = (axis: ScatterAxis) =>
     extent(
       rated.flatMap((m) => {
-        if (isFixedPlayer(m.model)) return [];
+        if (isFixedPlayer(m.model)) { return []; }
 
         const value = AXES[axis].valueOf(m);
 
@@ -218,26 +221,27 @@ const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMa
 });
 
 const xScaleOf = (axis: Axis, least: number, most: number, left: number, right: number) => {
-  if (axis.isLog) return logScale(stepPast(least, "down"), stepPast(most, "up"), left, right);
+  if (axis.isLog) { return logScale(stepPast(least, "down"), stepPast(most, "up"), left, right); }
 
   const pad = (most - least) * 0.06 || 1;
 
   return linScale(least - pad, most + pad, left, right, linearTicks(least - pad, most + pad, 9));
 };
 
+const isPower = (value: number) => Number.isInteger(Math.log10(value));
+
 /**
  * The x ticks that get a label: powers of ten first, then the rest from left to right, each only where it clears the
  * labels already placed and the plot's edges.
  */
 const labeledTicks = (ticks: ReadonlyArray<number>, at: (value: number) => number, text: (value: number) => string, font: string, left: number, right: number): ReadonlySet<number> => {
-  const isPower = (value: number) => Number.isInteger(Math.log10(value));
   const placed: Array<{ readonly value: number; readonly from: number; readonly to: number }> = [];
 
   for (const value of [...ticks.filter(isPower), ...ticks.filter((value) => !isPower(value))]) {
     const half = measureText(text(value), font) / 2 + 5;
     const [from, to] = [at(value) - half, at(value) + half];
 
-    if (from >= left - 20 && to <= right + 10 && placed.every((label) => to <= label.from || from >= label.to)) placed.push({ value, from, to });
+    if (from >= left - 20 && to <= right + 10 && placed.every((label) => to <= label.from || from >= label.to)) { placed.push({ value, from, to }); }
   }
 
   return new Set(placed.map(({ value }) => value));
@@ -259,7 +263,7 @@ const yScaleOf = (elo: readonly [number, number], top: number, bottom: number, i
 };
 
 const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterAxis: ScatterAxis, domain: Domain) => {
-  if (points.length === 0) return null;
+  if (points.length === 0) { return null; }
 
   const axis = AXES[scatterAxis];
   const isPhone = width < NARROW;
@@ -294,6 +298,10 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
   return { isPhone, type, height, right, x, xLabels, y, at, labels: uncrowded(placed, priority), frontier };
 });
 
+const selectAxis = (option: ScatterAxis) => Message.SelectedScatterAxis({ axis: option });
+
+const tierLabel = (rating: Rating | undefined): string => (rating === undefined || rating.tier === null ? "provisional" : `tier ${rating.tier}`);
+
 const textAt = (h: H, x: number, y: number, anchor: string, style: Readonly<Record<string, string>>, text: string): Html =>
   h.text([h.X(`${x}`), h.Y(`${y}`), h.TextAnchor(anchor), h.Style(style)], [text]);
 
@@ -319,12 +327,11 @@ export const scatterView = (
   const dim = (point: Point) => (isDimmed(point) ? { opacity: "0.55", filter: "grayscale(1)" } : isProvisional(point.m) ? { opacity: "0.4" } : {});
 
   const axes = axisOptions(everyConfig.some(({ regret }) => regret !== null));
-  const selectAxis = (option: ScatterAxis) => Message.SelectedScatterAxis({ axis: option });
 
   // A phone has no room for a row of buttons above the chart, so the choice is a menu.
   const controls = h.div([h.Class(width < NARROW ? "ctl menus" : "ctl")], [width < NARROW ? selectView(h, "x axis", scatter.axis, axes, selectAxis) : toggleView(h, scatter.axis, axes, selectAxis)]);
 
-  if (layout === null) return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h3([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]);
+  if (layout === null) { return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h3([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]); }
 
   const { type, height, right, x, xLabels, y, at, labels, frontier } = layout;
   const grid = { stroke: "oklch(72% 0 0)", "stroke-opacity": "0.25" };
@@ -367,7 +374,7 @@ export const scatterView = (
     const isOn = Option.exists(active, (shown) => shown === point);
     const r = isOn ? 6.5 : 4.5;
 
-    if (spot === undefined) return h.empty;
+    if (spot === undefined) { return h.empty; }
 
     return h.keyed("g")(
       point.m.key,
@@ -396,7 +403,7 @@ export const scatterView = (
     const spot = at[label.idx];
     const point = points[label.idx];
 
-    if (spot === undefined || point === undefined) return h.empty;
+    if (spot === undefined || point === undefined) { return h.empty; }
 
     const nameY = label.y - label.h / 2 + type.name * 0.82;
 
@@ -459,7 +466,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `${ratings.get(point.m.key)?.tier == null ? "provisional" : `tier ${ratings.get(point.m.key)?.tier}`} · ${ratingName} ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored} matches`,
+            `${tierLabel(ratings.get(point.m.key))} · ${ratingName} ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

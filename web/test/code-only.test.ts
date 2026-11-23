@@ -29,12 +29,13 @@ test("a changed string, template, regular expression, identifier or operator cha
     base.replace("hello // not", "hello // nope"),
     base.replace("kept", "lost"),
     base.replace("count + 1", "count - 1"),
-    base.replace('["\'\\/]+', '["\\/]+'),
+    base.replace(String.raw`["'\/]+`, String.raw`["\/]+`),
     base.replace("greeting", "salutation"),
     base.replace("total / 2", "total * 2"),
   ];
 
-  for (const source of changed) expect(codeOnly(source, "js")).not.toBe(codeOnly(base, "js"));
+  for (const source of changed) { expect(codeOnly(source, "js")).not.toBe(codeOnly(base, "js")); }
+
   expect(codeOnly("SELECT 'a b'", "sql")).not.toBe(codeOnly("SELECT 'a  b'", "sql"));
 });
 

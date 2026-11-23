@@ -1,7 +1,10 @@
+import { randomInt } from "node:crypto";
+
 import { Array as Arr, Option, Result } from "effect";
 
 import { SEATS_BY_TABLE } from "../domain.ts";
-import { begin, type Controller, playAis, type Progress } from "../driver.ts";
+import { begin, playAis } from "../driver.ts";
+import type { Controller, Progress } from "../driver.ts";
 import { seedRng } from "../rng.ts";
 import { rosterOf } from "../players.ts";
 import { describeError } from "../text.ts";
@@ -27,7 +30,7 @@ export interface HeadlessTable {
 
 export const emptyTable: HeadlessTable = { matchCount: 0, turn: 0, maybeMatch: Option.none() };
 
-const randomSeed = (): number => Math.floor(Math.random() * 2 ** 31);
+const randomSeed = (): number => randomInt(2 ** 31);
 
 const failed = (table: HeadlessTable, reason: string): Applied<HeadlessTable> => ({ state: table, maybeError: Option.some(reason) });
 
@@ -40,9 +43,9 @@ const bySeat = ({ table, controllers }: MatchSetup): ReadonlyArray<Controller> =
 const start = (table: HeadlessTable, setup: MatchSetup): Applied<HeadlessTable> => {
   const seatsAtTable = SEATS_BY_TABLE[setup.table];
 
-  if (setup.controllers.length < seatsAtTable.length) return failed(table, `Seat ${setup.controllers.length} of the ${seatsAtTable.length}-seat table has no controller. Give one per seat.`);
+  if (setup.controllers.length < seatsAtTable.length) { return failed(table, `Seat ${setup.controllers.length} of the ${seatsAtTable.length}-seat table has no controller. Give one per seat.`); }
 
-  if (setup.controllers.includes("Human")) return failed(table, "No one can click in the MCP server, so no player can be Human. Use Agent, DoN or Story.");
+  if (setup.controllers.includes("Human")) { return failed(table, "No one can click in the MCP server, so no player can be Human. Use Agent, DoN or Story."); }
 
   const seed = Option.getOrElse(setup.maybeSeed, randomSeed);
   const matchNumber = table.matchCount + 1;

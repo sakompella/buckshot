@@ -5,16 +5,20 @@ import { join } from "node:path";
 
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { ConfigProvider, Effect, Exit, Option, Redacted, Result, type Schema } from "effect";
+import { ConfigProvider, Effect, Exit, Option, Redacted, Result } from "effect";
+import type { Schema } from "effect";
 
 import { AGENTS } from "../src/arena/agent.ts";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
-import { assignAccounts, checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
+import { assignAccounts, checkPrices, childCommand, childEnv, parseConfig, resolveKeys, scheduleOf, unfinished } from "../src/arena/tournament.ts";
+import type { ScheduledMatch, Tournament } from "../src/arena/tournament.ts";
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
-import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import type { Scheduling } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
-import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, mulberry32, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
+import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, mulberry32, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
+import type { PlayedMatch } from "../src/arena/tournament-stats.ts";
 import { readManifest } from "./json-file.ts";
 
 // The tournament's schedule, config checks, stats and runner. No model is called:
@@ -52,6 +56,8 @@ const PAIRINGS = [
   ["don", "story", "luna", "opus"],
 ];
 
+const positionOf = (match: ScheduledMatch, entrant: string) => match.entrants.indexOf(entrant);
+
 test("a seed block seats every entrant at every position and at every offset from every other entrant equally often", () => {
   const tournament = tournamentFrom(configJson({ pairings: PAIRINGS, blocksPerPairing: 3 }));
   const schedule = scheduleOf(tournament);
@@ -62,7 +68,6 @@ test("a seed block seats every entrant at every position and at every offset fro
     for (const block of [0, 1, 2]) {
       const matches = schedule.filter((match) => match.pairing === index && match.block === block);
       const size = pairing.length;
-      const positionOf = (match: ScheduledMatch, entrant: string) => match.entrants.indexOf(entrant);
 
       expect(matches.length).toBe(factorial(size));
 
@@ -108,7 +113,7 @@ test("an engine entrant sits at its Engine seat, takes no letter, and can play a
   const engines = { ...ENTRANTS, "engine-d4": { engine: { depth: 4, budget: 20000 } } };
   const schedule = scheduleOf(tournamentFrom(configJson({ entrants: engines, pairings: [["engine-d4", "don"], ["luna", "engine-d4"]], blocksPerPairing: 1 })));
 
-  for (const match of schedule) expect(match.seats[match.entrants.indexOf("engine-d4")]).toBe("Engine/4/20000");
+  for (const match of schedule) { expect(match.seats[match.entrants.indexOf("engine-d4")]).toBe("Engine/4/20000"); }
 
   expect(schedule.filter((match) => match.entrants.includes("luna")).every((match) => match.entrants[match.seats.indexOf("A")] === "luna")).toBe(true);
 });
@@ -176,14 +181,15 @@ test("the players with the most cash share one win equally, and the others get n
   });
 });
 
+const truth = (entrant: string) => (STRENGTH.get(entrant) ?? 0) * ELO_PER_NAT;
+
 test("ratings recover the strengths and seat terms that drew the matches, and the bootstrap interval covers them", () => {
   const matches = syntheticMatches(7);
   const fitted = fitRatings(matches, "don");
-  const truth = (entrant: string) => (STRENGTH.get(entrant) ?? 0) * ELO_PER_NAT;
   const intervals = intervalsOf(resamples(matches, 100, 1).map((resample) => fitRatings(resample, "don").entrants));
 
   for (const entrant of ["haiku-5-5", "luna", "sonnet", "opus"]) {
-    const rating = fitted.entrants.get(entrant) ?? NaN;
+    const rating = fitted.entrants.get(entrant) ?? Number.NaN;
     const interval = intervals.get(entrant);
 
     expect(Math.abs(rating - truth(entrant))).toBeLessThan(60);
@@ -192,7 +198,7 @@ test("ratings recover the strengths and seat terms that drew the matches, and th
 
   expect(fitted.entrants.get("don")).toBe(0);
 
-  for (const seat of fitted.seats) expect(Math.abs(seat.rating - (SEAT_TERMS.get(`${seat.size}:${seat.position}`) ?? 0) * ELO_PER_NAT)).toBeLessThan(60);
+  for (const seat of fitted.seats) { expect(Math.abs(seat.rating - (SEAT_TERMS.get(`${seat.size}:${seat.position}`) ?? 0) * ELO_PER_NAT)).toBeLessThan(60); }
 
   expect(fitted.seats.map(({ size, position }) => `${size}:${position}`)).toEqual(["3:2", "3:3"]);
 });
@@ -213,9 +219,15 @@ test("a resample holds whole seeds, each as often as it was drawn", () => {
   for (const resample of resamples(matches, 20, 1)) {
     expect(resample.length).toBe(matches.length);
 
-    for (const seed of new Set(resample.map((match) => match.seed))) expect(resample.filter((match) => match.seed === seed).length % perSeed).toBe(0);
+    for (const seed of new Set(resample.map((match) => match.seed))) { expect(resample.filter((match) => match.seed === seed).length % perSeed).toBe(0); }
   }
 });
+
+const widthOf = (played: ReadonlyArray<PlayedMatch>) => {
+  const interval = intervalsOf(resamples(played, 500, 1).map((resample) => new Map([...sharesByEntrant(resample)].map(([entrant, { share }]) => [entrant, share])))).get("a");
+
+  return (interval?.high ?? Number.NaN) - (interval?.low ?? Number.NaN);
+};
 
 test("when the matches of a seed agree, a resample over seeds gives a wider interval than one over matches", () => {
   const random = mulberry32(11);
@@ -227,42 +239,36 @@ test("when the matches of a seed agree, a resample over seeds gives a wider inte
     return { name: `m${index}`, pairing: Math.floor(index / 10), seed, code: "v1", starter: 1, players: [firstWins ? 1 : 0, firstWins ? 0 : 1].map((share, at) => ({ entrant: at === 0 ? "a" : "b", share, moves: 1, reminders: 0, interventions: 0 })) };
   });
 
-  const widthOf = (played: ReadonlyArray<PlayedMatch>) => {
-    const interval = intervalsOf(resamples(played, 500, 1).map((resample) => new Map([...sharesByEntrant(resample)].map(([entrant, { share }]) => [entrant, share])))).get("a");
-
-    return (interval?.high ?? NaN) - (interval?.low ?? NaN);
-  };
-
   expect(widthOf(matches)).toBeGreaterThan(2 * widthOf(matches.map((match, index) => ({ ...match, seed: index }))));
 });
 
-test("the round 1 starter's rate counts the matches its player won, a tie by its share, for each table size", () => {
-  const played = (starter: number, shares: ReadonlyArray<number>): PlayedMatch => ({
-    name: "m",
-    pairing: 0,
-    seed: 0,
-    code: "v1",
-    starter,
-    players: shares.map((share, at) => ({ entrant: `e${at}`, share, moves: 1, reminders: 0, interventions: 0 })),
-  });
+const matchWithShares = (starter: number, shares: ReadonlyArray<number>): PlayedMatch => ({
+  name: "m",
+  pairing: 0,
+  seed: 0,
+  code: "v1",
+  starter,
+  players: shares.map((share, at) => ({ entrant: `e${at}`, share, moves: 1, reminders: 0, interventions: 0 })),
+});
 
-  expect(starterRates([played(1, [1, 0]), played(1, [0, 1]), played(2, [0, 1]), played(2, [0.5, 0.5]), played(3, [0, 0, 1])])).toEqual([
+test("the round 1 starter's rate counts the matches its player won, a tie by its share, for each table size", () => {
+  expect(starterRates([matchWithShares(1, [1, 0]), matchWithShares(1, [0, 1]), matchWithShares(2, [0, 1]), matchWithShares(2, [0.5, 0.5]), matchWithShares(3, [0, 0, 1])])).toEqual([
     { size: 2, matches: 4, started: [2, 2], wins: 2.5, rate: 0.625 },
     { size: 3, matches: 1, started: [0, 0, 1], wins: 1, rate: 1 },
   ]);
 });
 
-test("matches are grouped by the code they were played under, and an entrant's share is split by it", () => {
-  const played = (code: string, shares: ReadonlyArray<readonly [string, number]>): PlayedMatch => ({
-    name: "m",
-    pairing: 0,
-    seed: 0,
-    code,
-    starter: 1,
-    players: shares.map(([entrant, share]) => ({ entrant, share, moves: 1, reminders: 0, interventions: 0 })),
-  });
+const matchOfCode = (code: string, shares: ReadonlyArray<readonly [string, number]>): PlayedMatch => ({
+  name: "m",
+  pairing: 0,
+  seed: 0,
+  code,
+  starter: 1,
+  players: shares.map(([entrant, share]) => ({ entrant, share, moves: 1, reminders: 0, interventions: 0 })),
+});
 
-  const matches = [played("v1", [["a", 1], ["b", 0]]), played("v1", [["a", 0], ["b", 1]]), played("v1", [["a", 1], ["b", 0]]), played("v2", [["a", 0], ["c", 1]])];
+test("matches are grouped by the code they were played under, and an entrant's share is split by it", () => {
+  const matches = [matchOfCode("v1", [["a", 1], ["b", 0]]), matchOfCode("v1", [["a", 0], ["b", 1]]), matchOfCode("v1", [["a", 1], ["b", 0]]), matchOfCode("v2", [["a", 0], ["c", 1]])];
 
   expect(codeVersions(matches)).toEqual([
     { code: "v1", matches: 3, entrants: ["a", "b"] },
@@ -285,7 +291,7 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
   const agents = Object.fromEntries(match.seats.flatMap((seat, index) => {
     const entrant = tournament.config.entrants[match.entrants[index] ?? ""];
 
-    if (entrant === undefined || !("model" in entrant)) return [];
+    if (entrant === undefined || !("model" in entrant)) { return []; }
 
     const endpoint = tournament.config.endpoints[entrant.endpoint];
     const played = { api: endpoint?.api === "anthropic" ? "Anthropic" : "OpenAIResponses", url: endpoint === undefined ? null : new URL(endpoint.url).href.replace(/\/$/, ""), model: entrant.model, catalog_model: entrant.catalogModel ?? null, effort: entrant.effort };
@@ -328,7 +334,7 @@ test("an interrupted tournament and its restart finish every match once, and a f
   const fake = (breaks: ReadonlySet<string>, interrupt: AbortController) => async (match: ScheduledMatch) => {
     ran.push(match.name);
 
-    if (match.name === schedule[2]?.name) interrupt.abort();
+    if (match.name === schedule[2]?.name) { interrupt.abort(); }
 
     await Promise.resolve();
 
@@ -364,14 +370,14 @@ test("an interrupted tournament and its restart finish every match once, and a f
   const at = opening?.seats.findIndex((seat) => AGENTS.some((letter) => letter === seat)) ?? -1;
   const entrant = tournament.config.entrants[opening?.entrants[at] ?? ""];
 
-  if (opening === undefined || entrant === undefined || !("model" in entrant)) throw new Error("the first match has no model");
+  if (opening === undefined || entrant === undefined || !("model" in entrant)) { throw new Error("the first match has no model"); }
 
   const call = { t: "2026-10-16T00:00:00Z", agent: opening.seats[at], position: at + 1, provider: "p", api: "a", model: entrant.model, stop_reason: "stop", usage: { input: 1000, output: 0, cacheRead: 0, cacheWrite: 0 }, tool_calls: [], text: "", thinking: "" };
 
   writeFileSync(join(dir, opening.name, "calls.jsonl"), `${JSON.stringify(call)}\n`);
   writeFileSync(join(dir, opening.name, "events.jsonl"), `${JSON.stringify({ t: call.t, kind: "fault", agent: call.agent, player: call.agent, position: call.position, turn: 3, error: "429" })}\n`);
 
-  const priced = (prices.models[entrant.model]?.input ?? NaN) * 1000 / 1_000_000;
+  const priced = (prices.models[entrant.model]?.input ?? Number.NaN) * 1000 / 1_000_000;
   const report = reportOf(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: "", git_commit: "", schedule }, tournament, prices, 20);
 
   expect(report.matches).toEqual({ scheduled: schedule.length, finished: schedule.length, scored: schedule.length });
@@ -390,7 +396,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
   const schedule = scheduleOf(tournament);
   const [lunaFirst, lunaSecond, ...claude] = schedule;
 
-  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
+  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) { throw new Error("the schedule is not two luna matches, then two others"); }
 
   /** The fault line a match's run ends on when the endpoint reports luna at its usage limit for `seconds`. */
   const coolDown = (dir: string, match: ScheduledMatch, seconds: number) => {
@@ -444,7 +450,7 @@ test.each([
   const dir = mkdtempSync(join(tmpdir(), "tournament-limit-"));
   const at = Date.parse("2026-10-16T01:00:00Z");
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
   mkdirSync(join(dir, match.name));
   writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date(at).toISOString(), kind: "fault", agent: match.seats[match.entrants.indexOf("luna")], error })}\n`);
@@ -458,7 +464,7 @@ test("a half-written last line of a running match's log is not read yet", () => 
   const dir = mkdtempSync(join(tmpdir(), "tournament-partial-"));
   const at = Date.parse("2026-10-16T01:00:00Z");
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
   const fault = JSON.stringify({ t: new Date(at).toISOString(), kind: "fault", agent: match.seats[match.entrants.indexOf("luna")], error: 'openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}' });
 
@@ -474,7 +480,7 @@ test("each refusal in a row doubles the wait after a 429 without a reset, and a 
   const dir = mkdtempSync(join(tmpdir(), "tournament-backoff-"));
   const at = Date.parse("2026-10-16T01:00:00Z");
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
   const agent = match.seats[match.entrants.indexOf("luna")];
   const line = (kind: string) => JSON.stringify({ t: new Date(at).toISOString(), kind, agent, error: 'openai-responses-A API error (429): {"message":"Rate limit exceeded. Please try again later."}' });
@@ -496,7 +502,7 @@ test("a match with a model in last starts only when no other can, and a forgotte
   const schedule = scheduleOf(tournament);
   const [lunaFirst, lunaSecond, ...claude] = schedule;
 
-  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
+  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) { throw new Error("the schedule is not two luna matches, then two others"); }
 
   const playAll = async (dir: string, scheduling: Scheduling) => {
     const runs: Array<string> = [];
@@ -610,7 +616,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
   const [flaky, broken] = schedule;
   const runs: Array<string> = [];
 
-  if (flaky === undefined || broken === undefined) throw new Error("too few matches scheduled");
+  if (flaky === undefined || broken === undefined) { throw new Error("too few matches scheduled"); }
 
   const settled = await runPending(
     dir,
@@ -624,7 +630,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
 
       writeManifest(dir, tournament, match, fails ? "running" : "finished");
 
-      if (fails) failOnProvider(dir, match);
+      if (fails) { failOnProvider(dir, match); }
 
       return Promise.resolve(fails ? 1 : 0);
     },
@@ -675,7 +681,7 @@ test("a match started under a code version is resumed under it, and a match not 
   const dir = mkdtempSync(join(tmpdir(), "tournament-code-"));
   const [started, fresh] = scheduleOf(tournamentFrom(configJson({ pairings: [["luna", "don"]] })));
 
-  if (started === undefined || fresh === undefined) throw new Error("the schedule has fewer than two matches");
+  if (started === undefined || fresh === undefined) { throw new Error("the schedule has fewer than two matches"); }
 
   mkdirSync(join(dir, started.name));
   writeFileSync(join(dir, started.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { git_commit: "51b8366684f0", agents: {} } }));
@@ -758,7 +764,7 @@ test("a finished match that disagrees with the schedule is left out, and its cou
   const dir = mkdtempSync(join(tmpdir(), "tournament-read-"));
   const [match] = scheduleOf(tournament);
 
-  if (match === undefined) throw new Error("no match scheduled");
+  if (match === undefined) { throw new Error("no match scheduled"); }
 
   writeManifest(dir, tournament, match, "finished");
 
@@ -798,7 +804,7 @@ test("a match's child gets no PLAYER_* variable but its own, and no key shows in
   const [match] = scheduleOf(tournament);
   const keys = resolveKeys(tournament.config, scheduleOf(tournament), { SHARED_KEY: "sk-secret-value" });
 
-  if (match === undefined || Result.isFailure(keys)) throw new Error("setup failed");
+  if (match === undefined || Result.isFailure(keys)) { throw new Error("setup failed"); }
 
   const env = childEnv(BASE_ENV, tournament.config, match, keys.success);
 
@@ -820,7 +826,7 @@ test("an entrant's instructions addendum reaches only its own seat's environment
   const [match] = scheduleOf(tournament);
   const keys = resolveKeys(tournament.config, scheduleOf(tournament), { SHARED_KEY: "sk-test" });
 
-  if (match === undefined || Result.isFailure(keys)) throw new Error("setup failed");
+  if (match === undefined || Result.isFailure(keys)) { throw new Error("setup failed"); }
 
   const env = childEnv({}, tournament.config, match, keys.success);
   const seatOf = (entrant: string) => match.seats[match.entrants.indexOf(entrant)];
@@ -831,7 +837,7 @@ test("an entrant's instructions addendum reaches only its own seat's environment
   const plain = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
   const [plainMatch] = scheduleOf(plain);
 
-  if (plainMatch === undefined) throw new Error("setup failed");
+  if (plainMatch === undefined) { throw new Error("setup failed"); }
 
   expect(Object.keys(childEnv({}, plain.config, plainMatch, keys.success)).filter((name) => name.endsWith("_INSTRUCTIONS_ADDENDUM"))).toEqual([]);
 });
@@ -842,7 +848,7 @@ test("a finished match whose agent played without the instructions addendum the 
   const dir = mkdtempSync(join(tmpdir(), "tournament-addendum-"));
   const [match] = scheduleOf(tournament);
 
-  if (match === undefined) throw new Error("no match scheduled");
+  if (match === undefined) { throw new Error("no match scheduled"); }
 
   writeManifest(dir, tournament, match, "finished");
 
@@ -870,7 +876,7 @@ test("the example tournament's models all start as arena agents from the variabl
 
   expect(Result.isSuccess(checkPrices(tournament, prices))).toBe(true);
 
-  if (Result.isFailure(keys)) throw new Error(keys.failure.message);
+  if (Result.isFailure(keys)) { throw new Error(keys.failure.message); }
 
   const agents = schedule.flatMap((match) => AGENTS.flatMap((letter) => (match.seats.includes(letter) ? [{ match, letter }] : [])));
 
@@ -891,19 +897,26 @@ test("account assignment excludes cooling accounts, minimizes running matches an
   const tournament = pinnedTournament();
   const match = scheduleOf(tournament)[0];
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
-  for (const a of [0, 1, 3]) for (const b of [0, 1, 3]) for (const cooling of [[], ["account-a"], ["account-b"], ["account-a", "account-b"]]) for (const preferred of [[], ["account-b"], ["account-b", "account-a"], ["account-unknown", "account-a"]]) {
-    const loads = new Map([["account-a", a], ["account-b", b]]);
-    const assigned = assignAccounts(tournament.config, match, (_model, id) => cooling.includes(id), (id) => loads.get(id) ?? 0, preferred);
-    const available = [...loads].filter(([id]) => !cooling.includes(id));
+  for (const a of [0, 1, 3]) {
+    for (const b of [0, 1, 3]) {
+      for (const cooling of [[], ["account-a"], ["account-b"], ["account-a", "account-b"]]) {
+        for (const preferred of [[], ["account-b"], ["account-b", "account-a"], ["account-unknown", "account-a"]]) {
+          const loads = new Map([["account-a", a], ["account-b", b]]);
+          const assigned = assignAccounts(tournament.config, match, (_model, id) => cooling.includes(id), (id) => loads.get(id) ?? 0, preferred);
+          const available = [...loads].filter(([id]) => !cooling.includes(id));
 
-    if (available.length === 0) expect(assigned).toBeUndefined();
-    else {
-      const least = Math.min(...available.map(([, load]) => load));
-      const tied = available.flatMap(([id, load]) => (load === least ? [id] : []));
+          if (available.length === 0) {
+            expect(assigned).toBeUndefined();
+          } else {
+            const least = Math.min(...available.map(([, load]) => load));
+            const tied = available.flatMap(([id, load]) => (load === least ? [id] : []));
 
-      expect(assigned?.A).toBe(preferred.find((id) => tied.includes(id)) ?? tied[0]);
+            expect(assigned?.A).toBe(preferred.find((id) => tied.includes(id)) ?? tied[0]);
+          }
+        }
+      }
     }
   }
 
@@ -916,7 +929,7 @@ test("account ids travel only in the child environment, and unconfigured agents 
   const tournament = pinnedTournament();
   const match = scheduleOf(tournament)[0];
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
   const keys = new Map([["SHARED_KEY", Redacted.make("key")]]);
   const base = { PLAYER_A_ACCOUNT_ID: "inherited-account" };
@@ -945,7 +958,7 @@ test("a pinned refusal cools only its model/account pair; new games use the othe
   const dir = mkdtempSync(join(tmpdir(), "tournament-pins-"));
   const stop = new AbortController();
 
-  if (stopped === undefined) throw new Error("no match");
+  if (stopped === undefined) { throw new Error("no match"); }
 
   pinAndCool(dir, tournament, stopped, "account-a");
   expect(Option.getOrThrow(cooldownOf(dir, tournament.config, stopped, Date.now()))).toMatchObject({ model: "gpt-6-luna", account: "account-a" });
@@ -981,7 +994,7 @@ test("all cooling accounts hold new games back while an unrelated model still pl
   const dir = mkdtempSync(join(tmpdir(), "tournament-all-pins-cooling-"));
   const stop = new AbortController();
 
-  if (first === undefined || second === undefined) throw new Error("too few matches");
+  if (first === undefined || second === undefined) { throw new Error("too few matches"); }
 
   pinAndCool(dir, tournament, first, "account-a");
   pinAndCool(dir, tournament, second, "account-b");
@@ -1007,21 +1020,19 @@ test("a new match waits while every account of its model is cooling, never start
   const tournament = pinnedTournament();
   const [first, second, fresh] = scheduleOf(tournament);
   const dir = mkdtempSync(join(tmpdir(), "tournament-no-account-"));
-  const stop = new AbortController();
 
-  if (first === undefined || second === undefined || fresh === undefined) throw new Error("too few matches");
+  if (first === undefined || second === undefined || fresh === undefined) { throw new Error("too few matches"); }
 
   pinAndCool(dir, tournament, first, "account-a");
   pinAndCool(dir, tournament, second, "account-b");
 
   const runs: Array<string> = [];
 
-  setTimeout(() => { stop.abort(); }, 200);
   await runPending(dir, tournament.config, [first, second, fresh], 1, async (match) => {
     runs.push(match.name);
 
     return Promise.resolve(1);
-  }, () => undefined, stop.signal);
+  }, () => undefined, AbortSignal.timeout(200));
   expect(runs).toEqual([]);
 });
 
@@ -1030,7 +1041,7 @@ test("a match started without pins stays unpinned when its current endpoint list
   const match = scheduleOf(tournament)[0];
   const dir = mkdtempSync(join(tmpdir(), "tournament-legacy-pin-"));
 
-  if (match === undefined) throw new Error("no match");
+  if (match === undefined) { throw new Error("no match"); }
 
   writeManifest(dir, tournament, match, "running");
   await runPending(dir, tournament.config, [match], 1, async (candidate, accounts) => {
@@ -1046,13 +1057,12 @@ test("simultaneous matches spread over the least-loaded account", async () => {
   const schedule = scheduleOf(tournament).slice(0, 2);
   const dir = mkdtempSync(join(tmpdir(), "tournament-pin-load-"));
   const pins: Array<string> = [];
-  let release: () => void = () => undefined;
-  const bothStarted = new Promise<void>((resolve) => { release = resolve; });
+  const { promise: bothStarted, resolve: release } = Promise.withResolvers<void>();
 
   await runPending(dir, tournament.config, schedule, 2, async (match, accounts) => {
     pins.push(accounts.A ?? "");
 
-    if (pins.length === 2) release();
+    if (pins.length === 2) { release(); }
 
     await bothStarted;
     writeManifest(dir, tournament, match, "finished");
@@ -1070,7 +1080,7 @@ test("a refusal during this run leaves other accounts playing and keeps the paus
   const stop = new AbortController();
   const pins: Array<string> = [];
 
-  if (first === undefined) throw new Error("no match");
+  if (first === undefined) { throw new Error("no match"); }
 
   const settled = await runPending(dir, tournament.config, schedule, 1, async (match, accounts) => {
     pins.push(accounts.A ?? "");
@@ -1097,7 +1107,7 @@ test("an existing tournament can add account pins for new matches without changi
   const pinned = pinnedTournament();
   const started = scheduleOf(before)[0];
 
-  if (started === undefined) throw new Error("no match");
+  if (started === undefined) { throw new Error("no match"); }
 
   openTournament(dir, before, "old", new Date(0));
   writeManifest(dir, before, started, "running");

@@ -1,5 +1,6 @@
 import { rmSync } from "node:fs";
-import { createServer, type Socket } from "node:net";
+import { createServer } from "node:net";
+import type { Socket } from "node:net";
 import { createInterface } from "node:readline";
 
 import { Schema } from "effect";
@@ -25,16 +26,20 @@ const linkOver = (socket: Socket): HumanLink => {
   const lines = createInterface({ input: socket })[Symbol.asyncIterator]();
 
   return {
-    send: async (message) => new Promise<void>((sent, failed) => {
+    send: async (message) => {
+      const written = Promise.withResolvers<void>();
+
       socket.write(`${JSON.stringify(message)}\n`, (error) => {
-        if (error === undefined || error === null) sent();
-        else failed(error);
+        if (error === undefined || error === null) { written.resolve(); }
+        else { written.reject(error); }
       });
-    }),
+
+      return written.promise;
+    },
     nextLine: async () => {
       const next = await lines.next();
 
-      if (next.done === true) throw new Error("the human's terminal went away");
+      if (next.done === true) { throw new Error("the human's terminal went away"); }
 
       return next.value;
     },
@@ -45,22 +50,19 @@ const linkOver = (socket: Socket): HumanLink => {
 };
 
 /** Listens on `path` for one terminal. It resolves once listening, so the caller can tell the human where to connect. */
-export const listenForHuman = async (path: string): Promise<{ readonly connected: Promise<HumanLink> }> =>
-  new Promise((listening, failed) => {
-    let accept = (_link: HumanLink): void => undefined;
+export const listenForHuman = async (path: string): Promise<{ readonly connected: Promise<HumanLink> }> => {
+  const listening = Promise.withResolvers<void>();
+  const connection = Promise.withResolvers<HumanLink>();
 
-    const connected = new Promise<HumanLink>((resolve) => {
-      accept = resolve;
-    });
-
-    const server = createServer((socket) => {
-      server.close();
-      accept(linkOver(socket));
-    });
-
-    rmSync(path, { force: true });
-    server.once("error", failed);
-    server.listen(path, () => {
-      listening({ connected });
-    });
+  const server = createServer((socket) => {
+    server.close();
+    connection.resolve(linkOver(socket));
   });
+
+  rmSync(path, { force: true });
+  server.once("error", listening.reject);
+  server.listen(path, listening.resolve);
+  await listening.promise;
+
+  return { connected: connection.promise };
+};

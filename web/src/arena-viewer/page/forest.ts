@@ -4,7 +4,8 @@ import { fmtRating, isClaude, isFixedPlayer } from "./data.ts";
 import type { Derived, ModelStats } from "./derived.ts";
 import { inRankOrder } from "./leaderboard.ts";
 import type { Message } from "./model.ts";
-import { INTERVAL_PERCENT, type Rating } from "./ratings.ts";
+import { INTERVAL_PERCENT } from "./ratings.ts";
+import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -38,7 +39,7 @@ export const forestView = (h: H, derived: Derived): Html => {
   const rows = ratedOf(ranked.filter(({ model }) => !isFixedPlayer(model)), derived.ratings);
   const anchors = ratedOf(ranked.filter(({ model }) => isFixedPlayer(model)), derived.ratings);
 
-  if (rows.length === 0) return h.p([h.Class("k")], ["No ranked config for this filter."]);
+  if (rows.length === 0) { return h.p([h.Class("k")], ["No ranked config for this filter."]); }
 
   const scale = scaleOf([...rows, ...anchors]);
   const left = (elo: number) => ({ left: `${scale.at(elo)}%` });

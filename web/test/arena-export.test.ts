@@ -96,9 +96,9 @@ test("the analysis database exports aggregate files that pass the privacy check 
   expect(JSON.parse(files.get("summary") ?? "")).toMatchObject({ configs: [{ model: "faux-a", effort: "medium", scored: 1 }, { model: "faux-b", effort: "high", scored: 1 }] });
   expect(everything).not.toContain(String(SEED));
 
-  for (const { id } of blocks) expect(everything).not.toContain(id);
+  for (const { id } of blocks) { expect(everything).not.toContain(id); }
 
-  for (const poison of Object.values(POISON)) expect(everything).not.toContain(poison);
+  for (const poison of Object.values(POISON)) { expect(everything).not.toContain(poison); }
 });
 
 test("the privacy check names each kind of leak in the exported files", () => {
@@ -116,5 +116,5 @@ test("the privacy check names each kind of leak in the exported files", () => {
 
   expect(files.size).toBe(7);
 
-  for (const [, leaky, expected] of cases) expect(privacyViolations(leaky).join("\n")).toContain(expected);
+  for (const [, leaky, expected] of cases) { expect(privacyViolations(leaky).join("\n")).toContain(expected); }
 });

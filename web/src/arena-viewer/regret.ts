@@ -2,7 +2,8 @@ import { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
-import { gameAccuracy, judgementOf, NO_CHOICE_POINTS, type ScoredMove } from "./accuracy.ts";
+import { gameAccuracy, judgementOf, NO_CHOICE_POINTS } from "./accuracy.ts";
+import type { ScoredMove } from "./accuracy.ts";
 import type { MoveRegret, SeatRegret } from "./api.ts";
 
 // The regret table of the derived database that tools/arena builds (docs/arena/analysis/regret.md), read only. A regret
@@ -11,7 +12,7 @@ import type { MoveRegret, SeatRegret } from "./api.ts";
 
 const POINT = 10_000;
 
-const SeatMoveRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, ordinal: Schema.Number, regret: Schema.Number, best: Schema.Number, chosen: Schema.Number, spread: Schema.Number });
+const SeatMoveRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, ordinal: Schema.Finite, regret: Schema.Finite, best: Schema.Finite, chosen: Schema.Finite, spread: Schema.Finite });
 
 const Score = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 }));
 
@@ -19,7 +20,7 @@ const Flag = Schema.Literals([0, 1]);
 
 export const MoveRow = Schema.Struct({
   matchId: Schema.String,
-  ordinal: Schema.Number,
+  ordinal: Schema.Finite,
   label: Schema.String,
   values: Schema.fromJsonString(Schema.Array(Schema.Struct({ label: Schema.String, score: Score }))),
   regret: Schema.Int,
@@ -57,12 +58,12 @@ export const decodeMoveRow = Schema.decodeUnknownSync(MoveRow);
 const consistent = (row: MoveRow): MoveRow => {
   const mismatches = mismatchesOf(row);
 
-  if (mismatches.length > 0) throw new Error(`regret row ${row.matchId} #${row.ordinal}: ${mismatches.join("; ")}`);
+  if (mismatches.length > 0) { throw new Error(`regret row ${row.matchId} #${row.ordinal}: ${mismatches.join("; ")}`); }
 
   return row;
 };
 
-const Run = Schema.Struct({ evaluator: Schema.String, depth: Schema.Number, budget: Schema.Number, reload: Schema.String, samples: Schema.Number });
+const Run = Schema.Struct({ evaluator: Schema.String, depth: Schema.Finite, budget: Schema.Finite, reload: Schema.String, samples: Schema.Finite });
 
 const decodeRuns = Schema.decodeUnknownSync(Schema.Array(Run));
 
@@ -129,7 +130,7 @@ export const openRegret = (path: string): Regret => {
 const regretOf = (path: string, db: Database): Regret => {
   const runs = decodeRuns(db.query(`select distinct evaluator, max_depth depth, budget, reload, samples from regret`).all());
 
-  if (runs.length > 1) throw new Error(`${path} holds ${runs.length} regret runs, not one: ${JSON.stringify(runs)}`);
+  if (runs.length > 1) { throw new Error(`${path} holds ${runs.length} regret runs, not one: ${JSON.stringify(runs)}`); }
 
   const seatMoves = db.query(
     `select match_id matchId, player, ordinal, regret, best_score best, chosen_score chosen,

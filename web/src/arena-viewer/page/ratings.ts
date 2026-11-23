@@ -1,4 +1,5 @@
-import { groupBy, isProvisional, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
+import { groupBy, isProvisional, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults, sumOf, unique } from "./data.ts";
+import type { SeatFull } from "./data.ts";
 import { BOOTSTRAP_DRAWS } from "../../arena/bootstrap.ts";
 import { mulberry32 } from "../../arena/tournament-stats.ts";
 
@@ -57,7 +58,7 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
   for (let column = 0; column < size; column++) {
     let diagonal = a[column * size + column] ?? 0;
 
-    for (let k = 0; k < column; k++) diagonal -= (a[column * size + k] ?? 0) ** 2;
+    for (let k = 0; k < column; k++) { diagonal -= (a[column * size + k] ?? 0) ** 2; }
 
     const pivot = Math.sqrt(diagonal);
 
@@ -66,7 +67,7 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
     for (let row = column + 1; row < size; row++) {
       let value = a[row * size + column] ?? 0;
 
-      for (let k = 0; k < column; k++) value -= (a[row * size + k] ?? 0) * (a[column * size + k] ?? 0);
+      for (let k = 0; k < column; k++) { value -= (a[row * size + k] ?? 0) * (a[column * size + k] ?? 0); }
 
       a[row * size + column] = value / pivot;
     }
@@ -75,7 +76,7 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
   for (let row = 0; row < size; row++) {
     let value = b[row] ?? 0;
 
-    for (let k = 0; k < row; k++) value -= (a[row * size + k] ?? 0) * (b[k] ?? 0);
+    for (let k = 0; k < row; k++) { value -= (a[row * size + k] ?? 0) * (b[k] ?? 0); }
 
     b[row] = value / (a[row * size + row] ?? 1);
   }
@@ -83,7 +84,7 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
   for (let row = size - 1; row >= 0; row--) {
     let value = b[row] ?? 0;
 
-    for (let k = row + 1; k < size; k++) value -= (a[k * size + row] ?? 0) * (b[k] ?? 0);
+    for (let k = row + 1; k < size; k++) { value -= (a[k * size + row] ?? 0) * (b[k] ?? 0); }
 
     b[row] = value / (a[row * size + row] ?? 1);
   }
@@ -140,11 +141,11 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
   const precision = 1 / PRIOR_SD ** 2;
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    for (let id = 0; id < size; id++) gradient[id] = -precision * (strength[id] ?? 0);
+    for (let id = 0; id < size; id++) { gradient[id] = -precision * (strength[id] ?? 0); }
 
     curvature.fill(0);
 
-    for (let id = 0; id < size; id++) curvature[id * size + id] = precision;
+    for (let id = 0; id < size; id++) { curvature[id * size + id] = precision; }
 
     for (let pair = 0; pair < pairX.length; pair++) {
       const x = pairX[pair] ?? 0;
@@ -171,7 +172,7 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
       largest = Math.max(largest, Math.abs(gradient[id] ?? 0));
     }
 
-    if (largest < CONVERGED) break;
+    if (largest < CONVERGED) { break; }
   }
 
   return new Map(present.map((id, index) => [games.ids[id] ?? "", (strength[index] ?? 0) * ELO_PER_NAT] as const));
@@ -292,13 +293,13 @@ export const fittedRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
     for (const [key, rating] of fitGames(numbered, sample)) {
       const keyDraws = draws.get(key);
 
-      if (keyDraws) keyDraws[rep] = rating - zero;
+      if (keyDraws) { keyDraws[rep] = rating - zero; }
     }
   }
 
   const spans = new Map<string, Set<string>>();
 
-  for (const { a, b, block } of games) for (const key of [a, b]) spans.set(key, (spans.get(key) ?? new Set<string>()).add(block));
+  for (const { a, b, block } of games) { for (const key of [a, b]) {spans.set(key, (spans.get(key) ?? new Set<string>()).add(block)); }}
 
   const ratings = new Map(
     [...point].map(([key, rating]) => {

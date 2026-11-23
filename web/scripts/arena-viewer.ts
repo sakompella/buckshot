@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { Effect, Schema } from "effect";
+import { Config, Console, Effect, Schema } from "effect";
 
 import { openArena } from "../src/arena-viewer/load.ts";
 import { serveArenaViewer } from "../src/arena-viewer/server.ts";
@@ -19,7 +19,7 @@ const Flags = Schema.Struct({ regret: Schema.optional(Schema.String), knowledge:
 
 const Port = Schema.NumberFromString.check(Schema.isInt());
 
-const usage = () => new ScriptError({ message: USAGE, exitCode: 1 });
+const usage = () => ScriptError.make({ message: USAGE, exitCode: 1 });
 
 const isMissing = (path: string | undefined) => path !== undefined && !existsSync(path);
 
@@ -29,30 +29,30 @@ const program = Effect.gen(function* () {
   const [dbPath, host = "127.0.0.1", port = "8790"] = parsed.positionals;
   const { regret: regretPath, knowledge: knowledgePath, "certain-mistakes": certainPath, luck: luckPath } = flags;
 
-  if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath) || isMissing(luckPath)) return yield* usage();
+  if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath) || isMissing(luckPath)) { return yield* usage(); }
 
   const siteDir = fileURLToPath(new URL("../dist", import.meta.url));
 
-  if (!existsSync(`${siteDir}/index.html`)) return yield* new ScriptError({ message: `no built site at ${siteDir}: run \`bun run build\` first`, exitCode: 1 });
+  if (!existsSync(`${siteDir}/index.html`)) { return yield* ScriptError.make({ message: `no built site at ${siteDir}: run \`bun run build\` first`, exitCode: 1 }); }
 
   const listenPort = yield* Schema.decodeEffect(Port)(port).pipe(Effect.mapError(usage));
 
   // ARENA_VIEWER_PASSWORD guards the API. Blank is unset.
-  const password = process.env.ARENA_VIEWER_PASSWORD;
+  const password = yield* Config.String("ARENA_VIEWER_PASSWORD").pipe(Config.withDefault(""));
   const access = { password: password === "" ? undefined : password };
 
   const started = performance.now();
   const arena = yield* openArena(dbPath, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath });
 
-  console.log(`loaded ${arena.seats.length} seats in ${Math.round(performance.now() - started)} ms`);
+  yield* Console.log(`loaded ${arena.seats.length} seats in ${Math.round(performance.now() - started)} ms`);
 
   // Released first, so the server stops before the databases close.
   const server = yield* Effect.acquireRelease(
-    Effect.try({ try: () => serveArenaViewer(arena, siteDir, host, listenPort, access), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
+    Effect.try({ try: () => serveArenaViewer(arena, siteDir, host, listenPort, access), catch: (cause) => ScriptError.make({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
     (running) => Effect.promise(async () => running.stop()),
   );
 
-  console.log(`arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath, luckPath].filter((path) => path !== undefined).join(" and ")}`);
+  yield* Console.log(`arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath, luckPath].filter((path) => path !== undefined).join(" and ")}`);
 
   return yield* Effect.never;
 }).pipe(Effect.scoped);

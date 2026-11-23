@@ -1,8 +1,10 @@
 import { Array as Arr, Option, Result } from "effect";
 
 import type { AnswerError } from "../bend.ts";
-import { Briefcase, type Move, type Seat, Stage } from "../domain.ts";
-import { play, type Progress, promptsOf } from "../driver.ts";
+import { Briefcase, Stage } from "../domain.ts";
+import type { Move, Seat } from "../domain.ts";
+import { play, promptsOf } from "../driver.ts";
+import type { Progress } from "../driver.ts";
 import type { Roster } from "../players.ts";
 import { agentMoveText } from "../text.ts";
 
@@ -44,7 +46,7 @@ const chainsFrom = (progress: Progress, seat: Seat): Result.Result<ReadonlyArray
         Result.flatMap(playStep(progress, seat, index), (after): Result.Result<ReadonlyArray<Chain>, AnswerError> => {
           const continuations = (rest: ReadonlyArray<Chain>): ReadonlyArray<Chain> => rest.map((chain): Chain => [{ move, index }, ...chain]);
 
-          if (isHolding(after, seat)) return Result.map(chainsFrom(after, seat), (rest) => continuations(Arr.take(rest, 1)));
+          if (isHolding(after, seat)) { return Result.map(chainsFrom(after, seat), (rest) => continuations(Arr.take(rest, 1))); }
 
           return isMidAction(after, seat) ? Result.map(chainsFrom(after, seat), continuations) : Result.succeed([[{ move, index }]]);
         }),

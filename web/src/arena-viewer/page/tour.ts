@@ -2,7 +2,8 @@ import { Effect, Option, Schema } from "effect";
 import { Command } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { GROUPS, Message, type Section, type Tour } from "./model.ts";
+import { GROUPS, Message } from "./model.ts";
+import type { Section, Tour } from "./model.ts";
 import { INTERVAL_PERCENT } from "./ratings.ts";
 import { reveal } from "./reveal.ts";
 import { stickyHeight } from "./view.ts";
@@ -123,12 +124,12 @@ const placed = (step: number, hasCertain: boolean) => {
 
   const target = found.find(isDrawn) ?? (stop === undefined ? null : document.getElementById(stop.anchor));
 
-  if (target === null) return Message.PlacedTour({ step, maybeBox: Option.none(), isCardUnder: false });
+  if (target === null) { return Message.PlacedTour({ step, maybeBox: Option.none(), isCardUnder: false }); }
 
   const cardHeight = document.querySelector(".tour-card")?.getBoundingClientRect().height ?? CARD_GUESS;
 
   // A target inside the sticky bar is already in view.
-  if (target.closest(".top") === null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() - GAP);
+  if (target.closest(".top") === null) { scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() - GAP); }
 
   const rect = target.getBoundingClientRect();
   // A row wider than its scrolling table is cut at the page's edge, so the highlight never widens the page.
@@ -149,7 +150,7 @@ const nextFrame = Effect.callback<void>((resume) => {
 
 /** Places a step a frame after the card is drawn. */
 export const PlaceTour = Command.define("PlaceTour", {
-  args: { step: Schema.Number, hasCertain: Schema.Boolean },
+  args: { step: Schema.Finite, hasCertain: Schema.Boolean },
   messages: [Message.PlacedTour],
   execute: ({ step, hasCertain }) => nextFrame.pipe(Effect.map(() => placed(step, hasCertain))),
 });
@@ -157,9 +158,9 @@ export const PlaceTour = Command.define("PlaceTour", {
 // VIEW
 
 export const tourKeyMessage = (key: string): Option.Option<Message> => {
-  if (key === "Escape") return Option.some(Message.ClosedTour());
+  if (key === "Escape") { return Option.some(Message.ClosedTour()); }
 
-  if (key === "ArrowRight" || key === "ArrowDown") return Option.some(Message.SteppedTour({ delta: 1 }));
+  if (key === "ArrowRight" || key === "ArrowDown") { return Option.some(Message.SteppedTour({ delta: 1 })); }
 
   return key === "ArrowLeft" || key === "ArrowUp" ? Option.some(Message.SteppedTour({ delta: -1 })) : Option.none();
 };
@@ -172,7 +173,7 @@ export const tourView = (h: H, tour: Tour, viewportWidth: number): Html => {
   const steps = tourOf(tour.hasCertain);
   const step = steps[tour.step];
 
-  if (step === undefined) return h.empty;
+  if (step === undefined) { return h.empty; }
 
   const isLast = tour.step === steps.length - 1;
   const box = Option.getOrUndefined(tour.maybeBox);

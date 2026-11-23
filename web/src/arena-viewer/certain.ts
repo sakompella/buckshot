@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
-import { CERTAIN_TYPES, type CertainMistakes, CertainType, OpportunityType } from "./api.ts";
+import { CERTAIN_TYPES, CertainType, OpportunityType } from "./api.ts";
+import type { CertainMistakes } from "./api.ts";
 import { readOnly } from "./read-only.ts";
 
 const RateRow = Schema.Struct({
@@ -8,13 +9,13 @@ const RateRow = Schema.Struct({
   model: Schema.String,
   effort: Schema.String,
   type: OpportunityType,
-  chose: Schema.Number,
-  opportunities: Schema.Number,
-  lo: Schema.NullOr(Schema.Number),
-  hi: Schema.NullOr(Schema.Number),
+  chose: Schema.Finite,
+  opportunities: Schema.Finite,
+  lo: Schema.NullOr(Schema.Finite),
+  hi: Schema.NullOr(Schema.Finite),
 });
 
-const MistakeRow = Schema.Struct({ matchId: Schema.String, ordinal: Schema.Number, player: Schema.String, type: CertainType });
+const MistakeRow = Schema.Struct({ matchId: Schema.String, ordinal: Schema.Finite, player: Schema.String, type: CertainType });
 
 const decodeRate = Schema.decodeUnknownSync(RateRow);
 
@@ -50,7 +51,7 @@ export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>
 
   const byMatch = new Map<string, Map<number, CertainType>>();
 
-  for (const { matchId, ordinal, type } of mistakes) byMatch.set(matchId, (byMatch.get(matchId) ?? new Map<number, CertainType>()).set(ordinal, type));
+  for (const { matchId, ordinal, type } of mistakes) { byMatch.set(matchId, (byMatch.get(matchId) ?? new Map<number, CertainType>()).set(ordinal, type)); }
 
   return {
     summary: {

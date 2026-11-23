@@ -55,6 +55,15 @@ const BASES: ReadonlyArray<Base> = [
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
+const channel = (value: number) => {
+  const c = clamp(value, 0, 1);
+  const gamma = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+
+  return Math.round(gamma * 255)
+    .toString(16)
+    .padStart(2, "0");
+};
+
 /** OKLCH to an sRGB hex colour. */
 export const oklch = (lightness: number, chroma: number, hue: number): string => {
   const a = chroma * Math.cos((hue * Math.PI) / 180);
@@ -63,15 +72,6 @@ export const oklch = (lightness: number, chroma: number, hue: number): string =>
   const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
   const linear = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
-
-  const channel = (value: number) => {
-    const c = clamp(value, 0, 1);
-    const gamma = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
-
-    return Math.round(gamma * 255)
-      .toString(16)
-      .padStart(2, "0");
-  };
 
   return `#${linear.map(channel).join("")}`;
 };
@@ -101,7 +101,7 @@ export const baseName = (model: string): string => fixedName(model) ?? baseOf(mo
 export const colorOf = (model: string): string => {
   const base = baseOf(model);
 
-  if (base === undefined) return "#999";
+  if (base === undefined) { return "#999"; }
 
   const [lightness, chroma, hue] = base.tone;
 
@@ -147,31 +147,31 @@ export const baseOrder = (model: string): number => {
 // FORMATS
 
 export const fmtUsd = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return "–";
+  if (value === null || value === undefined) { return "–"; }
 
-  if (value === 0) return "$0";
+  if (value === 0) { return "$0"; }
 
-  if (value >= 100) return `$${value.toFixed(0)}`;
+  if (value >= 100) { return `$${value.toFixed(0)}`; }
 
-  if (value >= 1) return `$${value.toFixed(2)}`;
+  if (value >= 1) { return `$${value.toFixed(2)}`; }
 
   return value >= 0.01 ? `$${value.toFixed(3)}` : `$${value.toFixed(4)}`;
 };
 
 export const fmtBytes = (bytes: number): string => {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e9) { return `${(bytes / 1e9).toFixed(1)} GB`; }
 
   return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 };
 
 export const fmtCount = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return "–";
+  if (value === null || value === undefined) { return "–"; }
 
-  if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
+  if (value >= 1e9) { return `${(value / 1e9).toFixed(1)}B`; }
 
-  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e6) { return `${(value / 1e6).toFixed(1)}M`; }
 
-  if (value >= 1e4) return `${Math.round(value / 1e3)}k`;
+  if (value >= 1e4) { return `${Math.round(value / 1e3)}k`; }
 
   return value >= 1e3 ? `${(value / 1e3).toFixed(1)}k` : `${Math.round(value)}`;
 };
@@ -182,9 +182,9 @@ export const fmtPct = (value: number): string => `${(value * 100).toFixed(0)}%`;
 export const fmtShare = (share: number): string => `${(share * 100).toFixed(1)}%`;
 
 export const fmtSec = (ms: number | null | undefined): string => {
-  if (ms === null || ms === undefined) return "–";
+  if (ms === null || ms === undefined) { return "–"; }
 
-  if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
+  if (ms >= 60_000) { return `${(ms / 60_000).toFixed(1)}m`; }
 
   return ms >= 10_000 ? `${(ms / 1000).toFixed(0)}s` : `${(ms / 1000).toFixed(1)}s`;
 };
@@ -207,7 +207,7 @@ export const fmtRating = (rating: number): string => {
 export const sumOf = (values: Iterable<number>): number => {
   let total = 0;
 
-  for (const value of values) total += value;
+  for (const value of values) { total += value; }
 
   return total;
 };
@@ -221,8 +221,8 @@ export const groupBy = <A, K>(items: Iterable<A>, keyOfItem: (item: A) => K): Ma
     const key = keyOfItem(item);
     const group = groups.get(key);
 
-    if (group) group.push(item);
-    else groups.set(key, [item]);
+    if (group) { group.push(item); }
+    else { groups.set(key, [item]); }
   }
 
   return groups;
@@ -231,7 +231,7 @@ export const groupBy = <A, K>(items: Iterable<A>, keyOfItem: (item: A) => K): Ma
 export const unique = <A>(items: Iterable<A>): Array<A> => [...new Set(items)];
 
 export const quantile = (sorted: ArrayLike<number>, p: number): number => {
-  if (sorted.length === 0) return Number.NaN;
+  if (sorted.length === 0) { return Number.NaN; }
 
   const at = (sorted.length - 1) * p;
   const low = sorted[Math.floor(at)] ?? Number.NaN;
@@ -270,15 +270,15 @@ export const addTo = (tally: BlockTally, block: string, hits: number, trials: nu
   if (counts) {
     counts[0] += hits;
     counts[1] += trials;
-  } else tally.set(block, [hits, trials]);
+  } else { tally.set(block, [hits, trials]); }
 };
 
 export interface Rate {
   readonly k: number;
   readonly n: number;
-  readonly rate: number;
-  readonly lo: number;
-  readonly hi: number;
+  readonly rate: number | null;
+  readonly lo: number | null;
+  readonly hi: number | null;
   readonly blocks: number;
 }
 
@@ -287,12 +287,12 @@ export interface Rate {
 let draws = new Int32Array(0);
 
 const drawsFor = (count: number): Int32Array => {
-  if (draws.length >= count) return draws;
+  if (draws.length >= count) { return draws; }
 
   const random = mulberry32(7);
   const more = new Int32Array(Math.max(count, 2 * draws.length));
 
-  for (let index = 0; index < more.length; index++) more[index] = random() * 0x80000000;
+  for (let index = 0; index < more.length; index++) { more[index] = random() * 0x80000000; }
 
   draws = more;
 
@@ -307,7 +307,7 @@ export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
   const k = sumOf(blockHits);
   const n = sumOf(blockTrials);
 
-  if (n === 0) return { k, n, rate: Number.NaN, lo: Number.NaN, hi: Number.NaN, blocks: blocks.length };
+  if (n === 0) { return { k, n, rate: null, lo: null, hi: null, blocks: blocks.length }; }
 
   const states = drawsFor(reps * blocks.length);
   const rates = new Float64Array(reps);
@@ -324,12 +324,12 @@ export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
       trials += blockTrials[block] ?? 0;
     }
 
-    if (trials > 0) rates[count++] = hits / trials;
+    if (trials > 0) { rates[count++] = hits / trials; }
   }
 
   const sorted = rates.subarray(0, count).sort();
 
-  return { k, n, rate: k / n, lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975), blocks: blocks.length };
+  return { k, n, rate: k / n, lo: count === 0 ? null : quantile(sorted, 0.025), hi: count === 0 ? null : quantile(sorted, 0.975), blocks: blocks.length };
 };
 
 // CONFIG STATS
@@ -389,7 +389,7 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
   const totals = seats.flatMap(({ regret }) => (regret === null ? [] : [regret]));
   const moves = sumOf(totals.map((total) => total.moves));
 
-  if (moves === 0) return null;
+  if (moves === 0) { return null; }
 
   const per100 = (count: (seat: SeatRegret) => number) => (sumOf(totals.map(count)) / moves) * 100;
   const losses = totals.flatMap((total) => total.losses).toSorted((left, right) => left - right);
@@ -416,7 +416,7 @@ export const winnerOf = <S extends { readonly winShare: number | null }>(match: 
 export const resultOf = <S extends { readonly winShare: number | null; readonly model: string; readonly effort: string }>(match: Scored<S>): string => {
   const winner = winnerOf(match);
 
-  if (match.status !== "completed") return "unscored";
+  if (match.status !== "completed") { return "unscored"; }
 
   return winner === undefined ? `split ${fmtPct(match.seats[0]?.winShare ?? 0)}` : `${labelOf(keyOf(winner))} wins`;
 };

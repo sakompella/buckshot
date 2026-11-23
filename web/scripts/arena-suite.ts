@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-import { type Api, type AssistantMessage, type Context, createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, type Message, type Model, type TranscriptContext } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Context, Message, Model, TranscriptContext } from "@earendil-works/pi-ai";
 import { toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
-import { Effect, Schema } from "effect";
+import { Console, Effect, Schema } from "effect";
 
 import { costOf, DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint, labelOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
@@ -62,6 +63,8 @@ const decodeView = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct(
 /** The system message a conversation of the arena starts with, as pi-durable writes it after the first input. */
 const systemMessage = (instructions: string): Message => ({ role: "system", content: "", sections: { instructions: `<instructions>\n${instructions}\n</instructions>` }, toolsAdded: [GET_GAME, PLAY_MOVE].map(toToolDeclaration), timestamp: 0 });
 
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /** A move the player made, as a play_move call the model at `model` made, and its result. */
@@ -79,17 +82,22 @@ const played = (model: Model<Api>, calls: ReadonlyArray<typeof Turn.Type>): Arra
   ...calls.map(({ turn, label }): Message => ({ role: "toolResult", toolCallId: `play_${turn}`, toolName: PLAY_MOVE.name, content: [{ type: "text", text: JSON.stringify({ played: label }) }], isError: false, timestamp: 0 })),
 ];
 
+const user = (text: string): Message => ({ role: "user", content: text, timestamp: 0 });
+
+const keyOf = ({ match_id, ordinal }: Readonly<{ match_id: string; ordinal: number }>) => `${match_id}:${ordinal}`;
+
+const lines = (path: string) => readFileSync(path, "utf8").split("\n").filter(Boolean);
+
 /** The request for a position: each input, then the moves made from it, which a move without an input of its own joins. */
 const transcriptOf = (position: Position, system: Message, model: Model<Api>): Context => {
   const replies: Array<Array<typeof Turn.Type>> = [];
 
   for (const turn of position.turns.slice(0, -1)) {
-    if (turn.input === null) replies.at(-1)?.push(turn);
-    else replies.push([turn]);
+    if (turn.input === null) { replies.at(-1)?.push(turn); }
+    else { replies.push([turn]); }
   }
 
   const inputs = position.turns.flatMap(({ input }) => (input === null ? [] : [input]));
-  const user = (text: string): Message => ({ role: "user", content: text, timestamp: 0 });
 
   return { messages: inputs.flatMap((input, index) => [user(input), ...(index === 0 ? [system] : []), ...(index < replies.length ? played(model, replies[index] ?? []) : [])]) };
 };
@@ -119,7 +127,7 @@ const endpointModels = Effect.map(agentEndpoint("A"), (endpoint) => {
 
   const model = models.getModel(providerId, endpoint.model);
 
-  if (model === undefined) throw new Error(`${endpoint.model} is not a model of its provider`);
+  if (model === undefined) { throw new Error(`${endpoint.model} is not a model of its provider`); }
 
   return { models, model, label: labelOf(endpoint), thinkingLevel: endpoint.effort, instructions: agentInstructions({ provenance: provenanceOf(providerId, endpoint) }) };
 });
@@ -135,25 +143,24 @@ const program = Effect.gen(function* () {
   const { models, model, label, thinkingLevel, instructions } = flags.faux ? fauxModels() : yield* endpointModels;
   const system = systemMessage(instructions);
   const prices = loadPrices(DEFAULT_PRICES);
-  const keyOf = ({ match_id, ordinal }: Readonly<{ match_id: string; ordinal: number }>) => `${match_id}:${ordinal}`;
-  const lines = (path: string) => readFileSync(path, "utf8").split("\n").filter(Boolean);
   const done = new Set(existsSync(flags.out) ? lines(flags.out).map((line) => keyOf(decodeAnswered(line))) : []);
   const positions = lines(flags.suite).map((line) => decodePosition(line));
   const todo = positions.filter((position) => !done.has(keyOf(position))).slice(0, flags.limit);
   const shared = systemMessage(INSTRUCTIONS);
-  const systemSha = sha(JSON.stringify({ sections: shared.role === "system" ? shared.sections : undefined, toolsAdded: shared.role === "system" ? shared.toolsAdded : undefined }));
+  const sharedJson = yield* encodeJson({ sections: shared.role === "system" ? shared.sections : undefined, toolsAdded: shared.role === "system" ? shared.toolsAdded : undefined });
+  const systemSha = sha(sharedJson);
 
   // The shared instructions and the tools must be the ones the recorded players were sent; an addendum of the config asked goes after them.
   const other = positions.find((position) => position.system_sha !== systemSha);
 
-  yield* other === undefined ? Effect.void : new ScriptError({ message: `position ${other.match_id}:${other.ordinal} was played under another system message (${other.system_sha}); this checkout sends ${systemSha}`, exitCode: 1 });
+  yield* other === undefined ? Effect.void : ScriptError.make({ message: `position ${other.match_id}:${other.ordinal} was played under another system message (${other.system_sha}); this checkout sends ${systemSha}`, exitCode: 1 });
 
   const ask = async (position: Position) => {
     const started = performance.now();
     const reply = await models.completeSimple(model, transcriptOf(position, system, model), thinkingLevel === undefined || thinkingLevel === "off" ? {} : { reasoning: thinkingLevel });
 
     // A failed call is no answer: the run stops, and a rerun asks the position again.
-    if (reply.stopReason === "error") throw new Error(`${position.match_id}:${position.ordinal}: ${reply.errorMessage ?? "no message"}`);
+    if (reply.stopReason === "error") { throw new Error(`${position.match_id}:${position.ordinal}: ${reply.errorMessage ?? "no message"}`); }
 
     const recorded = position.turns.at(-1);
     const answer = answerOf(reply);
@@ -179,11 +186,9 @@ const program = Effect.gen(function* () {
     );
   };
 
-  const queue = [...todo];
+  yield* Effect.forEach(todo, (position) => Effect.promise(async () => ask(position)), { concurrency: flags.parallel, discard: true });
 
-  yield* Effect.promise(async () => Promise.all(Array.from({ length: flags.parallel }, async () => { for (let position = queue.shift(); position !== undefined; position = queue.shift()) await ask(position); })));
-
-  console.error(`${label}: asked ${todo.length} of ${positions.length} positions -> ${flags.out}`);
+  yield* Console.error(`${label}: asked ${todo.length} of ${positions.length} positions -> ${flags.out}`);
 });
 
 await runMain(program);

@@ -1,24 +1,25 @@
-import { Match, Schema, SchemaTransformation } from "effect";
+import { Match, Schema } from "effect";
 
-import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
-import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
+import { CertainRate, Consistency, ITEMS, NO_GAP } from "./api.ts";
+import type { Decisions, Seat } from "./api.ts";
+import { addTo, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, sumOf } from "./page/data.ts";
+import type { BlockTally, SeatFull } from "./page/data.ts";
 import { headlineRatings, playAndMoveRatings } from "./page/play-and-moves.ts";
-import { fittedRatings, type Luck, pooledRatings } from "./page/ratings.ts";
+import { fittedRatings, pooledRatings } from "./page/ratings.ts";
+import type { Luck } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
 // per match or per move. The viewer server serves the set at /api/agg/<name> and scripts/arena-export.ts writes it as
 // files. A filter keeps or drops whole configs, so the page picks and sums these to get what it shows.
 
-/** A rate whose sample may be empty: NaN in the page, null in JSON. */
-const Real = Schema.NullOr(Schema.Number).pipe(
-  Schema.decodeTo(Schema.Number, SchemaTransformation.transform({ decode: (value) => value ?? Number.NaN, encode: (value) => (Number.isNaN(value) ? null : value) })),
-);
+/** A rate whose sample may be empty: null when it is. */
+const EmptyAsNull = Schema.NullOr(Schema.Finite);
 
-const Interval = Schema.Struct({ lo: Schema.Number, hi: Schema.Number });
+const Interval = Schema.Struct({ lo: Schema.Finite, hi: Schema.Finite });
 
-export const Rate = Schema.Struct({ k: Schema.Number, n: Schema.Number, rate: Real, lo: Real, hi: Real, blocks: Schema.Number });
+export const Rate = Schema.Struct({ k: Schema.Finite, n: Schema.Finite, rate: EmptyAsNull, lo: EmptyAsNull, hi: EmptyAsNull, blocks: Schema.Finite });
 
-const RatingSchema = Schema.Struct({ rating: Schema.Number, blocks: Schema.Number, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Number), moves: Schema.optionalKey(Schema.Boolean) });
+const RatingSchema = Schema.Struct({ rating: Schema.Finite, blocks: Schema.Finite, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Finite), moves: Schema.optionalKey(Schema.Boolean) });
 
 const Item = Schema.Literals(ITEMS);
 
@@ -26,42 +27,42 @@ const Item = Schema.Literals(ITEMS);
 export const ConfigSummary = Schema.Struct({
   model: Schema.String,
   effort: Schema.String,
-  started: Schema.Number,
-  scored: Schema.Number,
-  winShare: Schema.Number,
+  started: Schema.Finite,
+  scored: Schema.Finite,
+  winShare: Schema.Finite,
   /** Mean pot share over scored matches. */
-  potShare: Schema.Number,
+  potShare: Schema.Finite,
   /** Rounds won over rounds played, in the scored matches whose rounds are known. */
-  roundShare: Schema.Number,
+  roundShare: Schema.Finite,
   /** Observed win share with a seed-block bootstrap interval. */
   win: Rate,
   regret: Schema.NullOr(
     Schema.Struct({
-      moves: Schema.Number,
-      accuracy: Schema.Number,
-      meanLost: Schema.Number,
-      p99Lost: Schema.Number,
-      bestShare: Schema.Number,
-      inaccuraciesPer100: Schema.Number,
-      mistakesPer100: Schema.Number,
-      blundersPer100: Schema.Number,
+      moves: Schema.Finite,
+      accuracy: Schema.Finite,
+      meanLost: Schema.Finite,
+      p99Lost: Schema.Finite,
+      bestShare: Schema.Finite,
+      inaccuraciesPer100: Schema.Finite,
+      mistakesPer100: Schema.Finite,
+      blundersPer100: Schema.Finite,
     }),
   ),
-  totalCost: Schema.Number,
-  startedMoves: Schema.Number,
-  avgCost: Schema.Number,
-  avgOut: Schema.Number,
-  avgMoves: Schema.Number,
-  scoredCost: Schema.Number,
-  scoredMoves: Schema.Number,
-  scoredLatency: Schema.Number,
+  totalCost: Schema.Finite,
+  startedMoves: Schema.Finite,
+  avgCost: Schema.Finite,
+  avgOut: Schema.Finite,
+  avgMoves: Schema.Finite,
+  scoredCost: Schema.Finite,
+  scoredMoves: Schema.Finite,
+  scoredLatency: Schema.Finite,
   /** Reasoning tokens the providers reported over scored matches; null when no call reported any. */
-  scoredReasoning: Schema.NullOr(Schema.Number),
+  scoredReasoning: Schema.NullOr(Schema.Finite),
   /** Scored moves whose calls billed reasoning tokens. */
-  scoredReasonedMoves: Schema.Number,
+  scoredReasonedMoves: Schema.Finite,
   /** Returned calls over scored matches, and those of them whose provider reported no reasoning token count. */
-  scoredReturned: Schema.Number,
-  scoredUnreported: Schema.Number,
+  scoredReturned: Schema.Finite,
+  scoredUnreported: Schema.Finite,
   /** Round Elo from one fit over every match (page/ratings.ts); null for a config with no rated match. */
   rating: Schema.NullOr(RatingSchema),
   /**
@@ -72,7 +73,7 @@ export const ConfigSummary = Schema.Struct({
   /** The headline rating combined with the rating its points lost per move predict (page/play-and-moves.ts); null without scored moves. */
   moveRating: Schema.NullOr(RatingSchema),
   /** The item used most often when legal, over at least MIN_LEGAL legal moves. */
-  favorite: Schema.NullOr(Schema.Struct({ item: Item, rate: Schema.Number, k: Schema.Number, n: Schema.Number })),
+  favorite: Schema.NullOr(Schema.Struct({ item: Item, rate: Schema.Finite, k: Schema.Finite, n: Schema.Finite })),
 });
 
 export type ConfigSummary = typeof ConfigSummary.Type;
@@ -83,7 +84,7 @@ export const Runs = Schema.Struct({ from: Schema.String, to: Schema.String });
 export type Runs = typeof Runs.Type;
 
 /** How many seed blocks hold a scored match, and how many of them hold only one, so their seat order is not balanced. */
-export const SeedBlocks = Schema.Struct({ blocks: Schema.Number, unpaired: Schema.Number });
+export const SeedBlocks = Schema.Struct({ blocks: Schema.Finite, unpaired: Schema.Finite });
 
 export type SeedBlocks = typeof SeedBlocks.Type;
 
@@ -93,31 +94,31 @@ export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), has
 export const Pair = Schema.Struct({
   first: Schema.String,
   second: Schema.String,
-  matches: Schema.Number,
-  scored: Schema.Number,
-  firstWins: Schema.Number,
-  secondWins: Schema.Number,
+  matches: Schema.Finite,
+  scored: Schema.Finite,
+  firstWins: Schema.Finite,
+  secondWins: Schema.Finite,
 });
 
 export type Pair = typeof Pair.Type;
 
-export const Fates = Schema.Struct({ used: Schema.Number, stolen: Schema.Number, unused: Schema.Number });
+export const Fates = Schema.Struct({ used: Schema.Finite, stolen: Schema.Finite, unused: Schema.Finite });
 
 export type Fates = typeof Fates.Type;
 
 /** A move has an item available when legalUse has a bit: an own item, a jam or an adrenaline steal. A steal counts as an adrenaline use. */
-export const Behavior = Schema.Struct({ moves: Schema.Number, available: Schema.Number, usedWhenAvailable: Schema.Number, itemActions: Schema.Number });
+export const Behavior = Schema.Struct({ moves: Schema.Finite, available: Schema.Finite, usedWhenAvailable: Schema.Finite, itemActions: Schema.Finite });
 
 export type Behavior = typeof Behavior.Type;
 
 /** A config's item fates over its scored two-player matches (`players` of them), in ITEMS order, and its moves' item behaviour over every match. */
-export const GapTokens = Schema.Struct({ moves: Schema.Number, tokens: Schema.Number });
+export const GapTokens = Schema.Struct({ moves: Schema.Finite, tokens: Schema.Finite });
 
 export type GapTokens = typeof GapTokens.Type;
 
 export const ConfigItems = Schema.Struct({
   config: Schema.String,
-  players: Schema.Number,
+  players: Schema.Finite,
   fates: Schema.Array(Fates),
   behavior: Behavior,
   /** Mean output tokens per move at each health gap from GAPS_FROM, the outer ones holding every wider gap. */
@@ -126,7 +127,7 @@ export const ConfigItems = Schema.Struct({
 
 export type ConfigItems = typeof ConfigItems.Type;
 
-export const ShotTally = Schema.Struct({ self: Schema.Number, shots: Schema.Number });
+export const ShotTally = Schema.Struct({ self: Schema.Finite, shots: Schema.Finite });
 
 export type ShotTally = typeof ShotTally.Type;
 
@@ -175,7 +176,7 @@ export const seatFates = (seat: Pick<Seat, "matchId" | "player" | "acquired" | "
     const used = seat.used[item] ?? 0;
     const stolen = opponent.stolen[item] ?? 0;
 
-    if (acquired < used + stolen) throw new Error(`match ${seat.matchId} Player ${seat.player}: ${ITEMS[item]} acquired ${acquired}, used ${used}, stolen ${stolen}`);
+    if (acquired < used + stolen) { throw new Error(`match ${seat.matchId} Player ${seat.player}: ${ITEMS[item]} acquired ${acquired}, used ${used}, stolen ${stolen}`); }
 
     return { used, stolen, unused: acquired - used - stolen };
   });
@@ -201,18 +202,18 @@ export const behaviorBySeat = (decisions: Pick<Decisions, "seat" | "legalUse" | 
   decisions.seat.forEach((seatIndex, move) => {
     const tally = tallies[seatIndex];
 
-    if (tally === undefined) return;
+    if (tally === undefined) { return; }
 
     const available = (decisions.legalUse[move] ?? 0) !== 0;
     const used = (decisions.useItem[move] ?? -1) >= 0;
 
     tally.moves++;
 
-    if (available) tally.available++;
+    if (available) { tally.available++; }
 
-    if (available && used) tally.usedWhenAvailable++;
+    if (available && used) { tally.usedWhenAvailable++; }
 
-    if (used) tally.itemActions++;
+    if (used) { tally.itemActions++; }
   });
 
   return tallies;
@@ -248,7 +249,7 @@ const tokensBySeat = (decisions: Pick<Decisions, "seat" | "gap" | "out">, seatCo
     const gap = decisions.gap[move] ?? NO_GAP;
     const tally = tallies[seatIndex]?.[Math.max(GAPS_FROM, Math.min(GAPS_TO, gap)) - GAPS_FROM];
 
-    if (gap === NO_GAP || tally === undefined) return;
+    if (gap === NO_GAP || tally === undefined) { return; }
 
     tally.moves++;
     tally.out += decisions.out[move] ?? 0;
@@ -342,7 +343,7 @@ export const selfShotTallies = (decisions: Pick<Decisions, "odds" | "seat" | "sh
     const seat = seats[seatAt];
     const bin = oddsBinOf(percent);
 
-    if (seat === undefined || keep[seatAt] !== true || bin < 0) return;
+    if (seat === undefined || keep[seatAt] !== true || bin < 0) { return; }
 
     const key = keyOf(seat);
     const bins = tallies.get(key) ?? ODDS_BINS.map(() => ({ self: 0, shots: 0 }));
@@ -351,7 +352,7 @@ export const selfShotTallies = (decisions: Pick<Decisions, "odds" | "seat" | "sh
     if (tally) {
       tally.shots++;
 
-      if (decisions.shot[move] === 2) tally.self++;
+      if (decisions.shot[move] === 2) { tally.self++; }
     }
 
     tallies.set(key, bins);
@@ -401,12 +402,12 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
   return [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
     const [first] = started;
 
-    if (first === undefined) return [];
+    if (first === undefined) { return []; }
 
     const scored = started.filter(({ status }) => status === "completed");
     const wins: BlockTally = new Map();
 
-    for (const seat of scored) addTo(wins, seat.seedBlock, seat.winShare ?? 0, 1);
+    for (const seat of scored) { addTo(wins, seat.seedBlock, seat.winShare ?? 0, 1); }
 
     const costs = scored.flatMap(({ cost }) => (cost === null ? [] : [cost]));
     const scoredMean = (value: (seat: SeatFull) => number | null) => meanOf(scored.map((seat) => value(seat) ?? 0));

@@ -7,11 +7,11 @@ import type { CallLine } from "./runlog.ts";
 // Prices model calls from their logged usage and a price table (prices.json),
 // so a new price only means reading the logs again.
 
-const Rates = Schema.Struct({ input: Schema.Number, output: Schema.Number, cacheRead: Schema.Number, cacheWrite: Schema.Number });
+const Rates = Schema.Struct({ input: Schema.Finite, output: Schema.Finite, cacheRead: Schema.Finite, cacheWrite: Schema.Finite });
 
 const PriceTable = Schema.Struct({
   unit: Schema.String,
-  models: Schema.Record(Schema.String, Schema.Struct({ ...Rates.fields, tiers: Schema.optional(Schema.Array(Schema.Struct({ ...Rates.fields, inputTokensAbove: Schema.Number }))), source: Schema.String })),
+  models: Schema.Record(Schema.String, Schema.Struct({ ...Rates.fields, tiers: Schema.optional(Schema.Array(Schema.Struct({ ...Rates.fields, inputTokensAbove: Schema.Finite }))), source: Schema.String })),
 });
 
 export type PriceTable = typeof PriceTable.Type;
@@ -24,7 +24,7 @@ export const loadPrices = (path: string): PriceTable => Schema.decodeSync(Schema
 export const costOf = (prices: PriceTable, call: Pick<CallLine, "model" | "usage">): number | undefined => {
   const price = prices.models[call.model];
 
-  if (price === undefined) return undefined;
+  if (price === undefined) { return undefined; }
 
   const prompt = call.usage.input + call.usage.cacheRead + call.usage.cacheWrite;
   const rates = price.tiers?.findLast((tier) => prompt > tier.inputTokensAbove) ?? price;
@@ -33,14 +33,14 @@ export const costOf = (prices: PriceTable, call: Pick<CallLine, "model" | "usage
 };
 
 export const Total = Schema.Struct({
-  calls: Schema.Number,
-  input: Schema.Number,
-  output: Schema.Number,
-  cacheRead: Schema.Number,
-  cacheWrite: Schema.Number,
-  reasoning: Schema.Number,
-  dollars: Schema.Number,
-  unpriced: Schema.Number,
+  calls: Schema.Finite,
+  input: Schema.Finite,
+  output: Schema.Finite,
+  cacheRead: Schema.Finite,
+  cacheWrite: Schema.Finite,
+  reasoning: Schema.Finite,
+  dollars: Schema.Finite,
+  unpriced: Schema.Finite,
 });
 
 export type Total = typeof Total.Type;
@@ -64,7 +64,7 @@ export const totalOf = (prices: PriceTable, calls: ReadonlyArray<CallLine>): Tot
 export const totalsBy = <K extends string>(prices: PriceTable, keyed: ReadonlyArray<readonly [K, CallLine]>): ReadonlyMap<K, Total> => {
   const totals = new Map<K, Total>();
 
-  for (const [key, call] of keyed) totals.set(key, plus(totals.get(key) ?? EMPTY, costOf(prices, call), call));
+  for (const [key, call] of keyed) { totals.set(key, plus(totals.get(key) ?? EMPTY, costOf(prices, call), call)); }
 
   return totals;
 };

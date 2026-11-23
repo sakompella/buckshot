@@ -1,8 +1,10 @@
 import { Array as Arr, Option, Result, Schema } from "effect";
 
-import { answerDraw, answerPrompt, type AnswerError, type Brain, type BendContractError, coinWord, decideMove, freshMind, type Game, hearNotes, Mind, nextPrompt, type Prompt, type Step, startGame, type Ticket } from "./bend.ts";
+import { answerDraw, answerPrompt, coinWord, decideMove, freshMind, hearNotes, Mind, nextPrompt, startGame } from "./bend.ts";
+import type { AnswerError, Brain, BendContractError, Game, Prompt, Step, Ticket } from "./bend.ts";
 import type { GameEvent, LearnedSecret, Seat, SeatCount } from "./domain.ts";
-import { nextBelow, type Rng } from "./rng.ts";
+import { nextBelow } from "./rng.ts";
+import type { Rng } from "./rng.ts";
 
 // Drives a match between controllers. Draws come from the seeded Rng. An AI
 // seat (Story or DoN) decides through the same Bend entry points the simulator
@@ -24,7 +26,7 @@ const AI_MOVE_LIMIT = 10_000;
 const SEATS: ReadonlyArray<Seat> = [0, 1, 2, 3];
 
 /** One AI seat: its memory, and how many coins it has drawn. */
-export const AiSeat = Schema.Struct({ mind: Schema.instanceOf(Mind), coins: Schema.Number });
+export const AiSeat = Schema.Struct({ mind: Schema.instanceOf(Mind), coins: Schema.Finite });
 
 export type AiSeat = typeof AiSeat.Type;
 
@@ -62,12 +64,12 @@ export const settleDraws = (start: Progress): Result.Result<Progress, AnswerErro
   for (let taken = 0; taken < DRAW_LIMIT; taken++) {
     const pending = progress.game.pending;
 
-    if (pending.kind !== "Draw") return Result.succeed(progress);
+    if (pending.kind !== "Draw") { return Result.succeed(progress); }
 
     const [value, rng] = nextBelow(progress.rng, pending.size);
     const answered = answerDraw(progress.game, pending.ticket, value);
 
-    if (Result.isFailure(answered)) return Result.fail(answered.failure);
+    if (Result.isFailure(answered)) { return Result.fail(answered.failure); }
 
     progress = absorb(progress, answered.success, rng);
   }
@@ -118,11 +120,11 @@ export const playAis = (start: Progress, controllers: ReadonlyArray<Controller>)
   for (let moves = 0; moves < AI_MOVE_LIMIT; moves++) {
     const prompt = aiPrompt(progress.game, controllers);
 
-    if (Option.isNone(prompt)) return Result.succeed(progress);
+    if (Option.isNone(prompt)) { return Result.succeed(progress); }
 
     const stepped = aiStep(progress, prompt.value);
 
-    if (Result.isFailure(stepped)) return stepped;
+    if (Result.isFailure(stepped)) { return stepped; }
 
     progress = stepped.success;
   }

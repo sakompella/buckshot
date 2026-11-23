@@ -7,16 +7,19 @@ import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/a
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
-import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, isFixedPlayer, keyOf, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, blockRate, fmtBytes, groupBy, isEngine, isFixedPlayer, keyOf, labelOf, matchRows, quantile, regretStats, withPotShares } from "../src/arena-viewer/page/data.ts";
+import type { BlockTally, SeatFull } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
-import { ANCHOR, bradleyTerry, type Game, heldOutRatings, matchWinVsAnchor, pooledRatings, type Rating } from "../src/arena-viewer/page/ratings.ts";
+import { ANCHOR, bradleyTerry, heldOutRatings, matchWinVsAnchor, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import type { Game, Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { headlineRatings, MOVES_BELOW, playAndMoveRatings } from "../src/arena-viewer/page/play-and-moves.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
-import { GameEvent, type Seat as Socket, Secret } from "../src/domain.ts";
+import { GameEvent, Secret } from "../src/domain.ts";
+import type { Seat as Socket } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 import { SEAT } from "./fixtures.ts";
@@ -44,7 +47,7 @@ test("Bradley-Terry ratings do not depend on which side a game lists first", () 
     const games = tc.draw(gamesGen);
     const swapped = bradleyTerry(games.map(({ a, b, sa }) => ({ a: b, b: a, sa: 1 - sa })));
 
-    for (const [id, rating] of bradleyTerry(games)) expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6);
+    for (const [id, rating] of bradleyTerry(games)) { expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6); }
   });
 });
 
@@ -108,7 +111,7 @@ test("one pooled Bradley-Terry fit recovers known strengths, including configs t
     const ratings = bradleyTerry(playedGames(mulberry32(seed), 1000));
     const mean = TRUE_ELO.reduce((total, [, elo]) => total + elo, 0) / TRUE_ELO.length;
 
-    for (const [id, elo] of TRUE_ELO) expect(Math.abs((ratings.get(id) ?? Number.NaN) - (elo - mean))).toBeLessThan(35);
+    for (const [id, elo] of TRUE_ELO) { expect(Math.abs((ratings.get(id) ?? Number.NaN) - (elo - mean))).toBeLessThan(35); }
   }
 });
 
@@ -136,7 +139,7 @@ const plainBlockRate = (tally: BlockTally, reps: number) => {
       trials += blockTrials;
     }
 
-    if (trials > 0) rates.push(hits / trials);
+    if (trials > 0) { rates.push(hits / trials); }
   }
 
   rates.sort((left, right) => left - right);
@@ -239,7 +242,7 @@ test("pooled ratings cover every config of a completed match, over every tournam
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
 
-  for (const { interval } of ratings.values()) expect(interval?.lo).toBeLessThan(interval?.hi ?? Number.NEGATIVE_INFINITY);
+  for (const { interval } of ratings.values()) { expect(interval?.lo).toBeLessThan(interval?.hi ?? Number.NEGATIVE_INFINITY); }
 });
 
 test("a config over fewer than 4 seed blocks has a rating and no interval", () => {
@@ -317,15 +320,15 @@ test("the Elo from play and move quality leans on the moves where the results ar
   expect(Math.abs(ratingOf("sure"))).toBeLessThan(5);
 });
 
-test("the headline takes the Elo from play and move quality below MOVES_BELOW matches, and the results from there on", () => {
-  const seatsOf = (model: string, matches: number) =>
-    Array.from({ length: matches }, (_match, index) => [0, 1].map((position): SeatFull => ({ ...SEAT, model: position === 0 ? model : "opponent", player: position === 0 ? "A" : "B", position, matchId: `${model}${index}`, potShare: null, regret: null }))).flat();
+const seatsPlayedBy = (model: string, matches: number) =>
+  Array.from({ length: matches }, (_match, index) => [0, 1].map((position): SeatFull => ({ ...SEAT, model: position === 0 ? model : "opponent", player: position === 0 ? "A" : "B", position, matchId: `${model}${index}`, potShare: null, regret: null }))).flat();
 
+test("the headline takes the Elo from play and move quality below MOVES_BELOW matches, and the results from there on", () => {
   const [thin, thick] = ["thin", "thick"].map((model) => keyOf({ model, effort: "medium" }));
   const keys = [thin ?? "", thick ?? ""];
   const results = { ratings: new Map(keys.map((key) => [key, { rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: null }] as const)), draws: new Map(keys.map((key) => [key, Float64Array.from([-10, 0, 10])] as const)) };
   const combined = new Map(keys.map((key) => [key, { rating: 50, blocks: 4, interval: { lo: 40, hi: 60 }, tier: null }] as const));
-  const headline = headlineRatings(results, combined, [...seatsOf("thin", MOVES_BELOW - 1), ...seatsOf("thick", MOVES_BELOW)]);
+  const headline = headlineRatings(results, combined, [...seatsPlayedBy("thin", MOVES_BELOW - 1), ...seatsPlayedBy("thick", MOVES_BELOW)]);
 
   expect(headline.get(thin ?? "")).toEqual({ rating: 50, blocks: 4, interval: { lo: 40, hi: 60 }, tier: 1, moves: true });
   expect(headline.get(thick ?? "")).toEqual({ rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: 2 });
@@ -362,10 +365,11 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
   return withPotShares(seats);
 };
 
+const seatWithRegret = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: seatRegret(10, [total]) });
+
 // The viewer check used to require Opus's mean regret below Haiku 4.5's on the live data; on fixed data it is a property of modelStats.
 test("a config's mean regret comes from its own scored seats, so a lower-regret config shows the lower mean", () => {
-  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: seatRegret(10, [total]) });
-  const seats = [seatOf("claude-opus-5-5", "m1", "A", 20), seatOf("claude-haiku-4-5-20251001", "m1", "B", 60), seatOf("claude-opus-5-5", "m2", "B", 40), seatOf("claude-haiku-4-5-20251001", "m2", "A", 80)];
+  const seats = [seatWithRegret("claude-opus-5-5", "m1", "A", 20), seatWithRegret("claude-haiku-4-5-20251001", "m1", "B", 60), seatWithRegret("claude-opus-5-5", "m2", "B", 40), seatWithRegret("claude-haiku-4-5-20251001", "m2", "A", 80)];
   const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.meanLost;
 
   expect(meanOf("claude-opus-5-5")).toBe(3);
@@ -380,25 +384,26 @@ test("the scatter's accuracy axis places a config with no searched move nowhere 
   expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 100, 98.5]);
 });
 
+const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
+const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);
+
 test("when losers win rounds, rounds ratings keep the order of sweeps' ratings but sit closer together", () => {
   for (let seed = 1; seed <= 5; seed++) {
     const seats = playedRoundSeats(seed, 3, 2);
     const sweeps = pooledRatings(playedRoundSeats(seed, 3, 3));
     const rounds = pooledRatings(seats);
-    const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
-    const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);
 
     expect(order(rounds)).toEqual(order(sweeps));
     expect(spread(rounds)).toBeLessThan(spread(sweeps));
   }
 });
 
+// Tiers leave provisional configs out, and the unknown matches still count toward a config's scored matches.
+const withoutTiers = (ratings: ReadonlyMap<string, Rating>) => new Map([...ratings].map(([key, { tier: _tier, ...rest }]) => [key, rest]));
+
 test("rounds ratings leave out matches whose round winners are not all known", () => {
   const known = playedRoundSeats(1, 3, 2);
   const unknown = playedRoundSeats(2, 3, 3, false).map((seat) => ({ ...seat, matchId: `unknown-${seat.matchId}` }));
-
-  // Tiers leave provisional configs out, and the unknown matches still count toward a config's scored matches.
-  const withoutTiers = (ratings: ReadonlyMap<string, Rating>) => new Map([...ratings].map(([key, { tier: _tier, ...rest }]) => [key, rest]));
 
   expect(withoutTiers(pooledRatings([...known, ...unknown]))).toEqual(withoutTiers(pooledRatings(known)));
 });
@@ -424,10 +429,11 @@ const upsetSeats = (count: number, strongWins: number) =>
     }).flat(),
   );
 
+const strongIn = (played: ReadonlyArray<SeatFull>, block: string) => heldOutRatings(played)(block).get("strong|medium")?.rating;
+
 test("a match's held-out ratings do not depend on its own seed block's results", () => {
   const seats = upsetSeats(40, 30);
   const flipped = seats.map((seat) => (seat.seedBlock === "block3" ? { ...seat, winShare: 1 - (seat.winShare ?? 0), story: oneRoundWonBy(seat.story?.rounds[0]?.winner === "A" ? "B" : "A") } : seat));
-  const strongIn = (played: ReadonlyArray<SeatFull>, block: string) => heldOutRatings(played)(block).get("strong|medium")?.rating;
 
   expect(strongIn(flipped, "block3")).toBe(strongIn(seats, "block3"));
   expect(strongIn(flipped, "block4")).not.toBe(strongIn(seats, "block4"));
@@ -445,10 +451,11 @@ test("odds bins cover every whole percent once, with the ends and even odds on t
   expect(oddsBinOf(-1)).toBe(-1);
 });
 
+const mediumSeat = (model: string) => ({ model, effort: "medium" });
+
 test("self-shot tallies count shots with odds per config and bin, and skip clued shots and filtered seats", () => {
-  const seat = (model: string) => ({ model, effort: "medium" });
   const decisions = { odds: [0, 0, 50, -1, 100, 0], seat: [0, 0, 0, 0, 1, 1], shot: [2, 1, 1, 2, 2, 2] };
-  const tallies = selfShotTallies(decisions, [seat("a"), seat("b")], [true, false]);
+  const tallies = selfShotTallies(decisions, [mediumSeat("a"), mediumSeat("b")], [true, false]);
 
   expect([...tallies.keys()]).toEqual(["a|medium"]);
   expect(tallies.get("a|medium")?.map(({ self, shots }) => [self, shots])).toEqual([[1, 2], [0, 0], [0, 0], [0, 1], [0, 0], [0, 0]]);
@@ -464,10 +471,11 @@ test("playing the odds keeps every effort the filter keeps, named as itself, wit
   expect(effortsOf([true, false, true, true])).toEqual([["claude-opus-5-5", ["low", "high", "max"]]]);
 });
 
+const seatsOfMatches = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
+const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating }, tier: null });
+
 test("ranks go to rated configs of 20 or more matches by rating, equal ratings by label; the rest have no rank and the leaderboard lists them after, the better rated first", () => {
-  const played = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
-  const stats = modelStats([...played("delta", 20), ...played("alpha", 20), ...played("charlie", 20), ...played("bravo", 20), ...played("echo", 19), ...played("foxtrot", 3)]);
-  const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating }, tier: null });
+  const stats = modelStats([...seatsOfMatches("delta", 20), ...seatsOfMatches("alpha", 20), ...seatsOfMatches("charlie", 20), ...seatsOfMatches("bravo", 20), ...seatsOfMatches("echo", 19), ...seatsOfMatches("foxtrot", 3)]);
   const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)], ["echo|medium", rated(90)], ["foxtrot|medium", rated(10)]]);
   const ranks = ranksOf(stats, ratings);
 
@@ -476,15 +484,15 @@ test("ranks go to rated configs of 20 or more matches by rating, equal ratings b
 });
 
 test("the page reads engine seats as the arena defines them", () => {
-  for (const seat of ["Engine/2/20000", "Engine/6/20000/sampled", "Engine/6/20000/static", "Engine/x/1", "claude-opus-5-5"]) expect(isEngine(seat)).toBe(isArenaEngine(seat));
+  for (const seat of ["Engine/2/20000", "Engine/6/20000/sampled", "Engine/6/20000/static", "Engine/x/1", "claude-opus-5-5"]) { expect(isEngine(seat)).toBe(isArenaEngine(seat)); }
 
   expect(baseName("Engine/6/20000/sampled")).toBe("Search engine, depth 6 (sampled reloads)");
 });
 
 test("the dealer AIs are fixed players like the engines, and no model is", () => {
-  for (const seat of ["Story", "DoN", "Engine/2/20000"]) expect(isFixedPlayer(seat)).toBe(true);
+  for (const seat of ["Story", "DoN", "Engine/2/20000"]) { expect(isFixedPlayer(seat)).toBe(true); }
 
-  for (const seat of ["claude-opus-5-5", "toString", "story"]) expect(isFixedPlayer(seat)).toBe(false);
+  for (const seat of ["claude-opus-5-5", "toString", "story"]) { expect(isFixedPlayer(seat)).toBe(false); }
 
   expect(baseName("DoN")).toBe("Double or Nothing dealer AI");
   expect(baseName("toString")).toBe("toString");
@@ -498,17 +506,17 @@ test("the anchor is rated 0, and an even match against it is a coin flip", () =>
   expect(matchWinVsAnchor(200)).toBeGreaterThan(1 / (1 + 10 ** (-200 / 400)));
 });
 
+const seatsOfPairing = (a: string, b: string, aRounds: (index: number) => number) =>
+  Array.from({ length: 40 }, (_match, index) => {
+    const won = aRounds(index);
+    const story = { starter: "A", ok: true, rounds: Array.from({ length: 3 }, (_round, round) => ({ winner: round < won ? "A" : "B", prize: 1 })) };
+    const seatOf = (model: string, player: string, position: number, share: number): Seat => ({ ...SEAT, matchId: `${a}${b}${index}`, seedBlock: `${a}${b}${index}`, model, effort: "medium", player, position, winShare: share, story });
+
+    return [seatOf(a, "A", 0, won >= 2 ? 1 : 0), seatOf(b, "B", 1, won >= 2 ? 0 : 1)];
+  }).flat();
+
 test("a config the data clearly ranks below the top starts the next tier; one it cannot tell apart joins it", () => {
-  const seatsOf = (a: string, b: string, aRounds: (index: number) => number) =>
-    Array.from({ length: 40 }, (_match, index) => {
-      const won = aRounds(index);
-      const story = { starter: "A", ok: true, rounds: Array.from({ length: 3 }, (_round, round) => ({ winner: round < won ? "A" : "B", prize: 1 })) };
-      const seatOf = (model: string, player: string, position: number, share: number): Seat => ({ ...SEAT, matchId: `${a}${b}${index}`, seedBlock: `${a}${b}${index}`, model, effort: "medium", player, position, winShare: share, story });
-
-      return [seatOf(a, "A", 0, won >= 2 ? 1 : 0), seatOf(b, "B", 1, won >= 2 ? 0 : 1)];
-    }).flat();
-
-  const ratings = pooledRatings(withPotShares([...seatsOf("strong", "mid", () => 3), ...seatsOf("mid", "low", (index) => (index % 2 === 0 ? 2 : 1))]));
+  const ratings = pooledRatings(withPotShares([...seatsOfPairing("strong", "mid", () => 3), ...seatsOfPairing("mid", "low", (index) => (index % 2 === 0 ? 2 : 1))]));
 
   expect(["strong", "mid", "low"].map((model) => ratings.get(`${model}|medium`)?.tier)).toEqual([1, 2, 2]);
 });
@@ -524,20 +532,20 @@ test("the best-value line runs through ranked configs only", () => {
   expect(frontierOf(points).map(({ m }) => m.model)).toEqual(["ranked"]);
 });
 
-test("a heat cell grows brighter with its win share, and fades toward the page below the matches that give full strength", () => {
-  const level = (value: number, n: number) => Number(/rgb\((\d+)/.exec(shadeOf(value, n).background)?.[1]);
+const level = (value: number, n: number) => Number(/rgb\((\d+)/.exec(shadeOf(value, n).background)?.[1]);
 
+test("a heat cell grows brighter with its win share, and fades toward the page below the matches that give full strength", () => {
   expect(level(0.8, FULL_N)).toBeGreaterThan(level(0.4, FULL_N));
   expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
   expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
   expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
 });
 
-test("a match search needs each of its words in a seat's label or the seed, in any order and with any spacing", () => {
-  const played = (matchId: string, seed: number, ...configs: ReadonlyArray<readonly [string, string]>) =>
-    matchRows(configs.map(([model, effort], position) => ({ ...SEAT, matchId, seed, model, effort, position, potShare: null })))[0] ?? { matchId, seats: [], startedAt: "", status: "", seed };
+const matchRowOf = (matchId: string, seed: number, ...configs: ReadonlyArray<readonly [string, string]>) =>
+  matchRows(configs.map(([model, effort], position) => ({ ...SEAT, matchId, seed, model, effort, position, potShare: null })))[0] ?? { matchId, seats: [], startedAt: "", status: "", seed };
 
-  const matches = [played("a", 4006, ["claude-opus-5-5", "max"], ["gpt-6.1-sol", "medium"]), played("b", 4007, ["claude-opus-5-5", "low"], ["gpt-6.1-sol", "max"]), played("c", 4008, ["gpt-6-luna", "max"], ["gpt-6.1-sol", "low"])];
+test("a match search needs each of its words in a seat's label or the seed, in any order and with any spacing", () => {
+  const matches = [matchRowOf("a", 4006, ["claude-opus-5-5", "max"], ["gpt-6.1-sol", "medium"]), matchRowOf("b", 4007, ["claude-opus-5-5", "low"], ["gpt-6.1-sol", "max"]), matchRowOf("c", 4008, ["gpt-6-luna", "max"], ["gpt-6.1-sol", "low"])];
   const found = (query: string) => rowsOf(matches, new Map(), query, Option.none()).map(({ match }) => match.matchId).toSorted();
 
   expect(found("opus max")).toEqual(["a", "b"]);

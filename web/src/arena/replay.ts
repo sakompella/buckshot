@@ -1,12 +1,18 @@
-import { Option, Result, Schema } from "effect";
+import type { Schema } from "effect";
+import { Option, Result } from "effect";
 
-import { emptyTable, type HeadlessTable } from "../agent/headless.ts";
-import { type AgentCall, AgentReply, type MatchSession, replyText, runTool, tools } from "../agent/tools.ts";
-import { agentGame, type AgentSource } from "../agent/view.ts";
-import { letteredSession, machineControllers, type RunManifest } from "./match.ts";
+import { emptyTable } from "../agent/headless.ts";
+import type { HeadlessTable } from "../agent/headless.ts";
+import { AgentReply, replyText, runTool, tools } from "../agent/tools.ts";
+import type { AgentCall, MatchSession } from "../agent/tools.ts";
+import { agentGame } from "../agent/view.ts";
+import type { AgentSource } from "../agent/view.ts";
+import { letteredSession, machineControllers } from "./match.ts";
+import type { RunManifest } from "./match.ts";
 import type { MoveLine } from "./runlog.ts";
 import { Counter, seatsOut } from "../domain.ts";
-import { type Letter, rosterOf } from "../players.ts";
+import { rosterOf } from "../players.ts";
+import type { Letter } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
 
 // A spectator's replay of a run: the match started from the manifest's seed,
@@ -107,7 +113,7 @@ const diverged = (replay: Replay, note: string): Replay => ({ ...replay, diverge
 const playLine = (replay: Replay, line: ReplayLine): Replay => {
   const replayed = labelOf(replay, line);
 
-  if (replayed !== line.label) return diverged(replay, `turn ${line.turn}: logged "${line.label}", replayed "${replayed}"`);
+  if (replayed !== line.label) { return diverged(replay, `turn ${line.turn}: logged "${line.label}", replayed "${replayed}"`); }
 
   return Result.match(
     Result.flatMap(callOf("play_move", { player: line.player, move: line.move, turn: line.turn }), (call) => run(replay.session, replay.table, call)),
@@ -149,7 +155,7 @@ export const replayOf = (previous: Option.Option<Replay>, setup: ReplaySetup, mo
     let replay = start;
 
     for (const line of moves.slice(replay.applied.length)) {
-      if (Option.isSome(replay.divergence)) break;
+      if (Option.isSome(replay.divergence)) { break; }
 
       replay = playLine(replay, line);
     }

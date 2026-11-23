@@ -1,5 +1,6 @@
 import { Effect, Option, Schema } from "effect";
-import { Command, Navigation, Submodel, Subscription, Update, type Url } from "foldkit";
+import { Command, Navigation, Submodel, Subscription, Update } from "foldkit";
+import type { Url } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
@@ -8,7 +9,8 @@ import * as Arena from "../arena-viewer/page/main.ts";
 import { Message as ArenaMessage, Model as ArenaModel } from "../arena-viewer/page/model.ts";
 import { view as arenaView } from "../arena-viewer/page/view.ts";
 import arenaStyles from "../arena-viewer/page/styles.css?inline";
-import { type ArenaRoute, isArenaRoute, isRootUrl, routeOf, SiteRoute } from "./route.ts";
+import { isArenaRoute, isRootUrl, routeOf, SiteRoute } from "./route.ts";
+import type { ArenaRoute } from "./route.ts";
 
 // The site: the arena's analysis under Arena, asking the arena server for its data.
 
@@ -28,7 +30,7 @@ export const Message = defineMessageUnion({
 
 export type Message = typeof Message.Type;
 
-type Return = Update.Return<Model, Message>;
+type Return = Update.Return<Model, Message, Arena.Resources>;
 
 const hrefOfUrl = (url: Url.Url): string => url.pathname + Option.match(url.search, { onNone: () => "", onSome: (search) => `?${search}` });
 
@@ -74,7 +76,7 @@ const changedUrl = (model: Model, route: SiteRoute, href: string): Return => {
   const routed = modifyFields(model, { route: () => route });
   const isArenaShowing = Option.exists(model.maybeArena, (arena) => Arena.hrefOf(arena) === href);
 
-  if (!isArenaRoute(route) || isArenaShowing) return { model: routed };
+  if (!isArenaRoute(route) || isArenaShowing) { return { model: routed }; }
 
   return enterArena(routed, route);
 };

@@ -13,14 +13,14 @@ const program = Effect.gen(function* () {
   const configured = yield* Config.option(Config.String("BEND"));
   const bend = Option.getOrUndefined(configured) ?? Bun.which("bend") ?? undefined;
 
-  if (bend === undefined) return yield* new ScriptError({ message: "bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary", exitCode: 1 });
+  if (bend === undefined) { return yield* ScriptError.make({ message: "bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary", exitCode: 1 }); }
 
   const build = yield* Effect.try({
     try: () => Bun.spawnSync([bend, source, "-o", output], { stdout: "inherit", stderr: "inherit" }),
-    catch: (cause) => new ScriptError({ message: `${bend} did not run: ${String(cause)}`, exitCode: 1 }),
+    catch: (cause) => ScriptError.make({ message: `${bend} did not run: ${String(cause)}`, exitCode: 1 }),
   });
 
-  if (build.exitCode === null) return yield* new ScriptError({ message: `${bend} was stopped by ${String(build.signalCode)}; generated/rules.mjs is not rebuilt`, exitCode: 1 });
+  if (build.exitCode === null) { return yield* ScriptError.make({ message: `${bend} was stopped by ${String(build.signalCode)}; generated/rules.mjs is not rebuilt`, exitCode: 1 }); }
 
   return build.exitCode;
 });

@@ -1,9 +1,11 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { colorOf, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, resultOf, type SeatFull, sumOf, winnerOf } from "./data.ts";
+import { colorOf, fmtTime, fmtUsd, keyOf, labelOf, resultOf, sumOf, winnerOf } from "./data.ts";
+import type { MatchRow, SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
-import { Message, type Model, type MatchPreset } from "./model.ts";
+import { Message } from "./model.ts";
+import type { Model, MatchPreset } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -67,9 +69,10 @@ const presetRows = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<strin
     .map(({ match, note }) => ({ match, note }));
 };
 
+const haystack = (match: MatchRow) => [...match.seats.map((seat) => labelOf(keyOf(seat)).toLowerCase()), String(match.seed)];
+
 export const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, query: string, maybePreset: Option.Option<MatchPreset>): ReadonlyArray<Listed> => {
   const words = query.toLowerCase().split(/\s+/).filter((word) => word !== "");
-  const haystack = (match: MatchRow) => [...match.seats.map((seat) => labelOf(keyOf(seat)).toLowerCase()), String(match.seed)];
   const isMatch = (match: MatchRow) => words.every((word) => haystack(match).some((text) => text.includes(word)));
   const searched = matches.filter(isMatch);
 

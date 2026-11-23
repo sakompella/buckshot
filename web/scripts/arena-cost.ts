@@ -4,7 +4,8 @@ import { parseArgs } from "node:util";
 
 import { Schema } from "effect";
 
-import { DEFAULT_PRICES, loadPrices, type Total, totalsBy } from "../src/arena/cost.ts";
+import { DEFAULT_PRICES, loadPrices, totalsBy } from "../src/arena/cost.ts";
+import type { Total } from "../src/arena/cost.ts";
 import { effortName, modelName } from "../src/arena/model-names.ts";
 import { readCalls } from "../src/arena/runlog.ts";
 

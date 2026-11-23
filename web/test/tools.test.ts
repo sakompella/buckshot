@@ -3,12 +3,15 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { Array as Arr, Option, Result, Schema } from "effect";
 
-import { emptyTable, type HeadlessTable, headlessSession } from "../src/agent/headless.ts";
+import { emptyTable, headlessSession } from "../src/agent/headless.ts";
+import type { HeadlessTable } from "../src/agent/headless.ts";
 import { agentMoves } from "../src/agent/moves.ts";
 import { AgentReply, runTool, tools } from "../src/agent/tools.ts";
 import { Game } from "../src/bend.ts";
-import { Briefcase, GameEvent, Move, type Seat, Secret, SeatCount, Stage } from "../src/domain.ts";
-import { type Controller, play as playMachine, type Progress, promptsOf } from "../src/driver.ts";
+import { Briefcase, GameEvent, Move, Secret, SeatCount, Stage } from "../src/domain.ts";
+import type { Seat } from "../src/domain.ts";
+import { play as playMachine, promptsOf } from "../src/driver.ts";
+import type { Controller, Progress } from "../src/driver.ts";
 import { Letter, rosterOf } from "../src/players.ts";
 import { eventText, itemName, secretText } from "../src/text.ts";
 
@@ -22,12 +25,12 @@ const EVERY_LETTER = Letter.literals;
 const View = Schema.Struct({
   you: Schema.String,
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  turn: Schema.optionalKey(Schema.Number),
+  turn: Schema.optionalKey(Schema.Finite),
   players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, holding: Schema.optionalKey(Schema.String) }))),
   gun: Schema.optionalKey(Schema.Struct({ sawed: Schema.optionalKey(Schema.Literal(true)) })),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))),
-  standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
+  standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Finite }))),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -175,7 +178,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
             expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
             expect(outcome.table).toBe(table);
 
-            if (isAtTable) expectOnlyPlayers(table, outcome.reply);
+            if (isAtTable) { expectOnlyPlayers(table, outcome.reply); }
 
             continue;
           }
@@ -194,7 +197,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
           expect(getGame({ ...table, maybeMatch: Option.some({ ...current, learned: ownNotes }) }, player)).toEqual(read.reply);
           expect(withoutMoves(getGame({ ...table, maybeMatch: Option.some({ ...current, game: hiddenSwapped }) }, player))).toEqual(withoutMoves(read.reply));
 
-          if (view.status !== "your turn") continue;
+          if (view.status !== "your turn") { continue; }
 
           expect(view.turn).toBe(turn);
           expect(view.players?.map((entry) => entry.player)).toEqual(roster.players.map(({ letter }) => letter));
@@ -299,7 +302,8 @@ test("on random tables of 2 to 4 players with items, the moves list is exactly t
 
           expect(isMidAction(end, seat)).toBe(false);
 
-          for (const { move } of chain) kinds.add(move._tag);
+          for (const { move } of chain) { kinds.add(move._tag); }
+
           checked += 1;
         }
       }
@@ -329,7 +333,7 @@ test("on random tables of 2 to 4 players, an Agent's views on its turns and the 
     heard.clear();
     playRandomTable(tc, {
       onMove: (player, view) => {
-        if (!heard.has(player)) expect(view.events?.[0]).toStartWith("Round 1 begins");
+        if (!heard.has(player)) { expect(view.events?.[0]).toStartWith("Round 1 begins"); }
 
         heard.set(player, [...(heard.get(player) ?? []), ...(view.events ?? [])]);
         turnsRead += 1;
@@ -355,14 +359,14 @@ test("a phone clue's position counts the chambered shell as 1, as the shells fir
       const { events, learned } = match(table);
 
       for (const { secret, at } of learned) {
-        if (!Secret.guards.Clue(secret)) continue;
+        if (!Secret.guards.Clue(secret)) { continue; }
 
         const rest = events.slice(at);
         const sameGun = rest.slice(0, Math.max(0, rest.findIndex(GameEvent.guards.Loaded)));
         const used = sameGun.flatMap((event) => (GameEvent.guards.Fired(event) || GameEvent.guards.Ejected(event) ? [event.shell] : []));
 
         // An inverter flips the chambered shell, which would hide what the clue said.
-        if (sameGun.some(GameEvent.guards.Inverted) || used.length < secret.position) continue;
+        if (sameGun.some(GameEvent.guards.Inverted) || used.length < secret.position) { continue; }
 
         expect(used[secret.position - 1]).toBe(secret.shell);
         checked += 1;

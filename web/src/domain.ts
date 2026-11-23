@@ -34,7 +34,7 @@ export const DrawLabel = Schema.Literals(["FirstSeat", "StartingHealth", "ItemAm
 
 export type DrawLabel = typeof DrawLabel.Type;
 
-export const Load = Schema.Struct({ live: Schema.Number, blank: Schema.Number });
+export const Load = Schema.Struct({ live: Schema.Finite, blank: Schema.Finite });
 
 export type Load = typeof Load.Type;
 
@@ -51,7 +51,7 @@ export const Move = Schema.TaggedUnion({
 export type Move = typeof Move.Type;
 
 export const Counter = Schema.TaggedUnion({
-  Unjammed: { health: Schema.Number },
+  Unjammed: { health: Schema.Finite },
   Jammed: {},
 });
 
@@ -69,7 +69,7 @@ export const SeatView = Schema.Struct({
   seat: Seat,
   counter: Counter,
   slots: Schema.Array(Schema.Option(Item)),
-  cash: Schema.Number,
+  cash: Schema.Finite,
   briefcase: Briefcase,
 });
 
@@ -90,9 +90,9 @@ export const Stage = Schema.TaggedUnion({
 export type Stage = typeof Stage.Type;
 
 export const Board = Schema.Struct({
-  round: Schema.Struct({ index: Schema.Number, rounds: Schema.Number, health: Schema.Number }),
+  round: Schema.Struct({ index: Schema.Finite, rounds: Schema.Finite, health: Schema.Finite }),
   seats: Schema.Array(SeatView),
-  gun: Schema.Struct({ shown: Load, remaining: Schema.Number, sawed: Schema.Boolean }),
+  gun: Schema.Struct({ shown: Load, remaining: Schema.Finite, sawed: Schema.Boolean }),
   direction: Direction,
   stage: Stage,
 });
@@ -104,7 +104,7 @@ export const Damage = Schema.Literals(["Single", "Double"]);
 export type Damage = typeof Damage.Type;
 
 export const GameEvent = Schema.TaggedUnion({
-  RoundBegan: { round: Schema.Number, health: Schema.Number, first: Seat },
+  RoundBegan: { round: Schema.Finite, health: Schema.Finite, first: Seat },
   GrabbingBegan: { seats: Schema.Array(Seat) },
   Granted: { seat: Seat, item: Item },
   Placed: { seat: Seat, slot: Slot, item: Item },
@@ -115,15 +115,15 @@ export const GameEvent = Schema.TaggedUnion({
   JamLifted: { seat: Seat },
   TurnGiven: { seat: Seat },
   PickedUp: { seat: Seat },
-  Fired: { shooter: Seat, target: Seat, shell: Shell, captured: Damage, applied: Schema.Number, health: Schema.Number },
+  Fired: { shooter: Seat, target: Seat, shell: Shell, captured: Damage, applied: Schema.Finite, health: Schema.Finite },
   Died: { seat: Seat },
   Used: { seat: Seat, owner: Seat, slot: Slot, item: Item },
-  Healed: { seat: Seat, health: Schema.Number },
+  Healed: { seat: Seat, health: Schema.Finite },
   Ejected: { seat: Seat, shell: Shell },
   Inverted: { seat: Seat },
   JamApplied: { by: Seat, target: Seat },
   DirectionFlipped: { direction: Direction },
-  RoundWon: { seat: Seat, prize: Schema.Number },
+  RoundWon: { seat: Seat, prize: Schema.Finite },
   MatchConcluded: {},
 });
 
@@ -131,7 +131,7 @@ export type GameEvent = typeof GameEvent.Type;
 
 export const Secret = Schema.TaggedUnion({
   Glimpse: { shell: Shell },
-  Clue: { position: Schema.Number, shell: Shell },
+  Clue: { position: Schema.Finite, shell: Shell },
   NoClue: {},
   EmptyBriefcase: {},
 });
@@ -144,7 +144,7 @@ export const HeardSecret = Schema.Struct({ seat: Seat, secret: Secret });
 export type HeardSecret = typeof HeardSecret.Type;
 
 // A heard secret, and how many events the log held when the step that told it ended.
-export const LearnedSecret = Schema.Struct({ ...HeardSecret.fields, at: Schema.Number });
+export const LearnedSecret = Schema.Struct({ ...HeardSecret.fields, at: Schema.Finite });
 
 export type LearnedSecret = typeof LearnedSecret.Type;
 

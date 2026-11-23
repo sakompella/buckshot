@@ -48,8 +48,8 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K): ReadonlyMa
   for (const item of items) {
     const group = groups.get(key(item));
 
-    if (group === undefined) groups.set(key(item), [item]);
-    else group.push(item);
+    if (group === undefined) { groups.set(key(item), [item]); }
+    else { group.push(item); }
   }
 
   return groups;
@@ -237,7 +237,7 @@ export const fitRatings = (matches: ReadonlyArray<PlayedMatch>, anchor: string |
             for (const column of theirs) {
               const row = curvature[parameter];
 
-              if (row !== undefined) row[column] = (row[column] ?? 0) + (player === other ? (chances[player] ?? 0) : 0) - (chances[player] ?? 0) * (chances[other] ?? 0);
+              if (row !== undefined) { row[column] = (row[column] ?? 0) + (player === other ? (chances[player] ?? 0) : 0) - (chances[player] ?? 0) * (chances[other] ?? 0); }
             }
           }
         }
@@ -255,7 +255,7 @@ export const fitRatings = (matches: ReadonlyArray<PlayedMatch>, anchor: string |
 
     x = x.map((value, index) => value + (move[index] ?? 0));
 
-    if (Math.max(...move.map(Math.abs)) < 1e-10) break;
+    if (Math.max(...move.map(Math.abs)) < 1e-10) { break; }
   }
 
   const strengths = entrants.map((_, index) => x[index] ?? 0);

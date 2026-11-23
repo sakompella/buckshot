@@ -6,10 +6,13 @@ import { parseArgs } from "node:util";
 import { Option, Result, Schema } from "effect";
 
 import { agentMoves, playChain } from "../src/agent/moves.ts";
-import { boardOf, type Limits, loadPlayer, ownLog } from "../src/analysis/player.ts";
+import { boardOf, loadPlayer, ownLog } from "../src/analysis/player.ts";
+import type { Limits } from "../src/analysis/player.ts";
 import { answerDraw, nextPrompt, startGame } from "../src/bend.ts";
-import { GameEvent, type Seat } from "../src/domain.ts";
-import { type Progress, promptsOf, settleDraws } from "../src/driver.ts";
+import { GameEvent } from "../src/domain.ts";
+import type { Seat } from "../src/domain.ts";
+import { promptsOf, settleDraws } from "../src/driver.ts";
+import type { Progress } from "../src/driver.ts";
 import { rosterOf } from "../src/players.ts";
 import { nextBelow, seedRng } from "../src/rng.ts";
 import { agentMoveText } from "../src/text.ts";
@@ -35,7 +38,7 @@ const { values } = parseArgs({
 
 const USAGE = "Usage: bun scripts/arena-selfplay.ts --out <file.jsonl> --from SEED --count N [--swap both|no|only] [--reps N] [--depth N] [--budget N] [--ties first|random] [--shard K/N]";
 
-const whole = (text: string | undefined): number => (text !== undefined && /^\d+$/.test(text) ? Number(text) : NaN);
+const whole = (text: string | undefined): number => (text !== undefined && /^\d+$/.test(text) ? Number(text) : Number.NaN);
 
 const from = whole(values.from);
 const count = whole(values.count);
@@ -77,7 +80,7 @@ const start = (seed: number, swap: boolean): Progress => {
   const first = ok(startGame(2, true, 1));
   const pending = first.game.pending;
 
-  if (pending.kind !== "Draw" || pending.label !== "FirstSeat") throw new Error("a match does not open with the FirstSeat draw");
+  if (pending.kind !== "Draw" || pending.label !== "FirstSeat") { throw new Error("a match does not open with the FirstSeat draw"); }
 
   const [drawn, rng] = nextBelow(seedRng(seed), pending.size);
   const step = ok(answerDraw(first.game, pending.ticket, swap ? pending.size - 1 - drawn : drawn));
@@ -104,7 +107,7 @@ const playMatch = (seed: number, swap: boolean, rep: number) => {
   const openings: Array<{ round: number; position: number; score: number }> = [];
 
   for (let guard = 0; progress.game.pending.kind === "Choose"; guard++) {
-    if (guard > 5000) throw new Error(`seed ${seed}: the match did not end`);
+    if (guard > 5000) { throw new Error(`seed ${seed}: the match did not end`); }
 
     const prompt = Option.getOrThrow(nextPrompt(progress.game, promptsOf(progress.game)));
     const me = prompt.seat;
@@ -115,7 +118,7 @@ const playMatch = (seed: number, swap: boolean, rep: number) => {
     if (moves.length > 1) {
       const analysis = player.analyse({ table: 2, items: true, board: boardOf(progress.game), log: ownLog(progress.events, progress.learned, me), me }, limits, { rule: "static" });
 
-      if (analysis.kind === "invalid") throw new Error(`seed ${seed}: the player cannot analyse the position: ${analysis.reason}`);
+      if (analysis.kind === "invalid") { throw new Error(`seed ${seed}: the player cannot analyse the position: ${analysis.reason}`); }
 
       const best = analysis.lines[analysis.best];
       const tied = analysis.lines.filter((line) => line.score === best?.score);
@@ -128,20 +131,24 @@ const playMatch = (seed: number, swap: boolean, rep: number) => {
 
       const round = progress.events.filter(GameEvent.guards.RoundBegan).length;
 
-      if (best !== undefined && !openings.some((opening) => opening.round === round)) openings.push({ round, position: progress.game.seats.indexOf(me) + 1, score: best.score });
+      if (best !== undefined && !openings.some((opening) => opening.round === round)) { openings.push({ round, position: progress.game.seats.indexOf(me) + 1, score: best.score }); }
 
       const line = randomTies ? tied[mixed(seed, swap ? 1 : 0, rep, stats.decisions) % tied.length] : best;
       const label = line === undefined ? "" : agentMoveText(roster, me, line.steps);
 
       index = moves.findIndex((move) => move.label === label);
 
-      if (index < 0) throw new Error(`seed ${seed}: the player's move "${label}" is not on the menu ${JSON.stringify(moves.map((move) => move.label))}`);
+      if (index < 0) { throw new Error(`seed ${seed}: the player's move "${label}" is not on the menu ${JSON.stringify(moves.map((move) => move.label))}`); }
     }
 
-    progress = ok(playChain(progress, me, (moves[index] ?? moves[0])!.chain));
+    const chosen = moves[index] ?? moves[0];
+
+    if (chosen === undefined) { throw new Error(`seed ${seed}: the player has no move`); }
+
+    progress = ok(playChain(progress, me, chosen.chain));
   }
 
-  if (progress.game.pending.kind !== "Finished") throw new Error(`seed ${seed}: the match stopped at ${progress.game.pending.kind}`);
+  if (progress.game.pending.kind !== "Finished") { throw new Error(`seed ${seed}: the match stopped at ${progress.game.pending.kind}`); }
 
   const position = (seat: Seat): number => progress.game.seats.indexOf(seat) + 1;
   const rounds: Array<{ round: number; starter: number; winner: number; prize: number }> = [];
@@ -167,7 +174,7 @@ const key = (seed: number, swap: boolean, rep: number): string => `${seed}/${swa
 mkdirSync(dirname(out), { recursive: true });
 
 const decodeDone = Schema.decodeUnknownSync(
-  Schema.fromJsonString(Schema.Struct({ seed: Schema.Number, swap: Schema.Boolean, rep: Schema.Number, depth: Schema.Number, budget: Schema.Number, tieRule: Schema.String })),
+  Schema.fromJsonString(Schema.Struct({ seed: Schema.Finite, swap: Schema.Boolean, rep: Schema.Finite, depth: Schema.Finite, budget: Schema.Finite, tieRule: Schema.String })),
 );
 
 const finished = (existsSync(out) ? readFileSync(out, "utf8").split("\n") : []).filter((line) => line !== "").map((line) => decodeDone(line));
@@ -185,18 +192,18 @@ const started = performance.now();
 let played = 0;
 
 for (let seed = from; seed < from + count; seed++) {
-  if ((seed - from) % shardCount !== shardNumber - 1) continue;
+  if ((seed - from) % shardCount !== shardNumber - 1) { continue; }
 
   for (let rep = 0; rep < reps; rep++) {
     for (const swap of swaps) {
-      if (done.has(key(seed, swap, rep))) continue;
+      if (done.has(key(seed, swap, rep))) { continue; }
 
       appendFileSync(out, `${JSON.stringify(playMatch(seed, swap, rep))}\n`);
       played += 1;
     }
   }
 
-  if ((seed - from) % 10 === shardNumber - 1) console.error(`seed ${seed}: ${played} matches in ${Math.round((performance.now() - started) / 1000)} s`);
+  if ((seed - from) % 10 === shardNumber - 1) { console.error(`seed ${seed}: ${played} matches in ${Math.round((performance.now() - started) / 1000)} s`); }
 }
 
 console.error(`done: ${played} matches in ${Math.round((performance.now() - started) / 1000)} s`);

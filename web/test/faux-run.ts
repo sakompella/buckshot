@@ -1,9 +1,11 @@
-import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
+import { contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AssistantMessage, TranscriptContext } from "@earendil-works/pi-ai";
 import { Effect, Schema } from "effect";
 
 import { AGENTS } from "../src/arena/agent.ts";
 import type { AgentProvenance } from "../src/arena/endpoints.ts";
-import { type Delivery, playMatch } from "../src/arena/match.ts";
+import { playMatch } from "../src/arena/match.ts";
+import type { Delivery } from "../src/arena/match.ts";
 import type { Controller } from "../src/driver.ts";
 
 // A finished arena run that costs nothing: faux pi-ai models that answer each
@@ -17,7 +19,7 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
   const last = transcript.messages.findLast((message) => message.role !== "system");
   const text = last === undefined || last.role === "assistant" ? "" : contentText(last.content, "");
 
-  if (!text.startsWith("Your turn.")) return fauxAssistantMessage(fauxText("Done."));
+  if (!text.startsWith("Your turn.")) { return fauxAssistantMessage(fauxText("Done.")); }
 
   const view = parseView(text.slice(text.indexOf("{")));
   const turn = view.turn ?? 0;

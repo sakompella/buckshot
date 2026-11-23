@@ -18,6 +18,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import bt
+from configs import config_label
 from load import DB, connect, round_winners
 
 REPO = Path(__file__).resolve().parents[3]
@@ -123,6 +124,16 @@ def report_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float
 
 
 class RoundElo(unittest.TestCase):
+    def test_a_merged_self_pair_changes_no_rating(self):
+        """Efforts merged into one config (configs.config_label) make a match of two seat labels a self-pair: it says nothing of strength."""
+        a, b = config_label("claude-opus-5-5-off"), "engine"
+        self_pair = (a, config_label("claude-opus-5-5-low"), 3.0, 3.0)
+        self.assertEqual(self_pair[0], self_pair[1])
+        rows = [(a, b, 3.0, 2.0)]
+        without, ours, theirs = bt.round_elo(rows), bt.round_elo([*rows, self_pair]), viewer_ratings([*rows, self_pair])
+        self.assertAlmostEqual(ours[a] - ours[b], without[a] - without[b], delta=TOLERANCE)
+        self.assertAlmostEqual(ours[a] - ours[b], theirs[a] - theirs[b], delta=TOLERANCE)
+
     def test_the_docs_fit_is_the_sites_fit(self):
         rows = matches()
         ours, theirs = bt.round_elo(rows), viewer_ratings(rows)

@@ -1,7 +1,8 @@
 import { Match } from "effect";
 
 import type { BendContractError, NoPrompt, StaleAnswer } from "./bend.ts";
-import { GameEvent, type Item, Move, type Seat, Secret } from "./domain.ts";
+import { GameEvent, Move, Secret } from "./domain.ts";
+import type { Item, Seat } from "./domain.ts";
 import type { Roster } from "./players.ts";
 
 // The words the UI and the agent tools both use for players, items, moves and events.

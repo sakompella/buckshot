@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { Option, Result } from "effect";
 
 import { startGame } from "../src/bend.ts";
-import { type Assignment, Letter, rosterOf } from "../src/players.ts";
+import { Letter, rosterOf } from "../src/players.ts";
+import type { Assignment } from "../src/players.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../src/domain.ts";
 
 const EVERY_LETTER = Letter.literals;
@@ -18,11 +19,11 @@ test("at 2, 3 and 4 seats the players are exactly Player A to Player N in table 
 
     expect(seats.map(roster.nameOf)).toEqual(["Player A", "Player B", "Player C", "Player D"].slice(0, table));
 
-    for (const seat of seats) expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat)));
+    for (const seat of seats) { expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat))); }
 
-    for (const { letter, seat } of roster.players) expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat));
+    for (const { letter, seat } of roster.players) { expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat)); }
 
-    for (const letter of EVERY_LETTER.slice(table)) expect(roster.find(letter)).toEqual(Option.none());
+    for (const letter of EVERY_LETTER.slice(table)) { expect(roster.find(letter)).toEqual(Option.none()); }
   }
 });
 
@@ -37,11 +38,11 @@ test("an explicit assignment names every seat as given, whichever seats the lett
       expect(roster.players.map(({ letter }) => letter)).toEqual([...letters]);
       expect(seats.map(roster.nameOf)).toEqual(letters.map((letter) => `Player ${letter}`));
 
-      for (const seat of seats) expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat)));
+      for (const seat of seats) { expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat))); }
 
-      for (const { letter, seat } of roster.players) expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat));
+      for (const { letter, seat } of roster.players) { expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat)); }
 
-      for (const letter of EVERY_LETTER.filter((candidate) => !letters.includes(candidate))) expect(roster.find(letter)).toEqual(Option.none());
+      for (const letter of EVERY_LETTER.filter((candidate) => !letters.includes(candidate))) { expect(roster.find(letter)).toEqual(Option.none()); }
     }
   }
 });
@@ -50,7 +51,7 @@ test("an assignment that leaves a seat without a letter, or gives two seats one 
   const [first, second] = SEATS_BY_TABLE[2];
   const a = "A" satisfies Letter;
 
-  if (first === undefined || second === undefined) throw new Error("a 2-seat table has two seats");
+  if (first === undefined || second === undefined) { throw new Error("a 2-seat table has two seats"); }
 
   expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a]]))).toThrow();
   expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a], [second, a]]))).toThrow();

@@ -3,7 +3,8 @@ import { flow, Option, Result, Schema, SchemaTransformation } from "effect";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { Controller, controllerOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
-import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts";
+import { agentGame, agentMove } from "./view.ts";
+import type { AgentSource, SeatMove } from "./view.ts";
 
 // The agent tools, whatever carries them: their names, descriptions and input
 // schemas, and what each call does to a match. A front end (the stdio MCP server)
@@ -181,7 +182,7 @@ export const runTool = <S>(session: MatchSession<S>, state: S, call: AgentCall):
         }),
       ),
     NewMatch: ({ players, items, seed, controllers = defaultControllers(players) }) => {
-      if (Option.exists(session.current(state), isInProgress)) return refused(state, MATCH_IN_PROGRESS);
+      if (Option.exists(session.current(state), isInProgress)) { return refused(state, MATCH_IN_PROGRESS); }
 
       return controllers.length === players
         ? after(session.start(state, { table: players, isItemsEnabled: items, maybeSeed: Option.fromUndefinedOr(seed), controllers }), (started) => tableReply(session, started))

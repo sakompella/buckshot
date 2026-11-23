@@ -17,7 +17,7 @@ const Tournament = loose({ config: loose({ name: Schema.String, entrants: Schema
 
 const readTournament = readJson(Tournament);
 
-const Run = loose({ provenance: loose({ agents: Agents }), letters: Schema.Array(Schema.String), standings: Schema.Array(loose({ player: Schema.String, cash: Schema.Number })) });
+const Run = loose({ provenance: loose({ agents: Agents }), letters: Schema.Array(Schema.String), standings: Schema.Array(loose({ player: Schema.String, cash: Schema.Finite })) });
 
 const readRun = readJson(Run);
 
@@ -25,7 +25,7 @@ const readSetup = readJson(RunManifest);
 
 const readMove = Schema.decodeUnknownSync(Schema.fromJsonString(MoveLine));
 
-const Call = Schema.decodeUnknownSync(Schema.fromJsonString(loose({ turn: Schema.Number })));
+const Call = Schema.decodeUnknownSync(Schema.fromJsonString(loose({ turn: Schema.Finite })));
 
 const withEntrant = (file: typeof Tournament.Type, entrant: string, changes: Readonly<Record<string, Schema.Json>>) => ({ ...file, config: { ...file.config, entrants: { ...file.config.entrants, [entrant]: { ...file.config.entrants[entrant], ...changes } } } });
 
@@ -313,7 +313,11 @@ test("the replay's events and secrets are stored, each seat has its socket, and 
     const eventsPath = join(manifestPath, "..", "events.jsonl");
     const lines = readFileSync(eventsPath, "utf8").split("\n");
     const delivered = lines.findIndex((line) => line.includes('"kind":"delivered"') && line.includes("Player A"));
-    lines[delivered] = lines[delivered]!.replace("Player A", "Player Q");
+    const line = lines[delivered];
+
+    if (line === undefined) { throw new Error("no delivered line"); }
+
+    lines[delivered] = line.replace("Player A", "Player Q");
     writeFileSync(eventsPath, lines.join("\n"));
     expect(() => { importTournaments({ database, sources: [source] }); }).toThrow(`delivered line ${delivered + 1} differs from the replayed events`);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -450,7 +454,7 @@ test("a truncated but legal move prefix with an end marker and matching current 
     const cash = prefix.frames.at(-1)?.players ?? [];
     expect(cash.length).toBe(2);
     writeFileSync(eventsPath, lines.filter((_, index) => index !== lastMove).join("\n"));
-    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, move_log_sha: undefined, standings: manifest.standings.map((standing) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
     expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("the replay did not reach the end");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -470,5 +474,125 @@ test("importing a tournament from a directory that contains its earlier source r
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 1 AND path LIKE '" + source + "/%'")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 0 AND path LIKE '" + source + "/%'")).not.toEqual([{ n: 0 }]);
     expect(rowsOf(database, "PRAGMA foreign_key_check")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+const Totals = loose({ agents: Schema.Record(Schema.String, loose({ model_calls: Schema.Int, usage: Schema.Record(Schema.String, Schema.Finite) })) });
+
+const readTotals = readJson(Totals);
+
+const stops = (sources: ReadonlyArray<string>, database: string) => () => { importTournaments({ database, sources }); };
+
+test("a skip that names no scheduled match or no imported directory stops the import, and a trailing slash still names its directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+
+    expect(() => { importTournaments({ database, sources: [source], skipped: { [source]: { a_b_b0_p9: "typo" } } }); }).toThrow("a skip names a match the schedule does not list");
+    expect(() => { importTournaments({ database, sources: [source], skipped: { [join(root, "elsewhere")]: { a_b_b0_p0: "other" } } }); }).toThrow("a skip names a directory that is not imported");
+    importTournaments({ database, sources: [source], skipped: { [`${source}/`]: { a_b_b0_p0: "cut" } } });
+    expect(rowsOf(database, "SELECT status, disposition, status_reason FROM matches")).toEqual([{ status: "partial", disposition: "skipped", status_reason: "cut" }]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a seat whose manifest label is not its entrant's config stops the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+
+    writeFileSync(manifestPath, JSON.stringify({ ...readRun(manifestPath), labels: ["faux-a-high", "faux-b-medium"] }));
+    expect(stops([source], join(root, "analysis.sqlite"))).toThrow("the manifest's label at position 1 is not its entrant's config");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("two configs under one label stop the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const tournamentPath = join(source, "tournament.json");
+    const file = readTournament(tournamentPath);
+    const entrants = { ...file.config.entrants, c: { ...file.config.entrants.a, instructionsAddendum: "Answer at once." } };
+
+    writeFileSync(tournamentPath, JSON.stringify({ ...file, config: { ...file.config, entrants }, schedule: [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "c"] }] }));
+    writeFileSync(manifestPath, JSON.stringify(withAgent(readRun(manifestPath), "B", { model: "faux-a", instructions_addendum: "Answer at once." })));
+    expect(stops([source], join(root, "analysis.sqlite"))).toThrow("two configs play as faux-a-medium");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("manifest call and token totals that differ from calls.jsonl stop the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const totals = readTotals(manifestPath);
+    const agent = totals.agents.A;
+    const changed = (changes: Readonly<Record<string, Schema.Json>>) => { writeFileSync(manifestPath, JSON.stringify({ ...totals, agents: { ...totals.agents, A: { ...agent, ...changes } } })); };
+
+    changed({ model_calls: (agent?.model_calls ?? 0) + 1 });
+    expect(stops([source], database)).toThrow("the manifest's model calls for A disagree with calls.jsonl");
+    changed({ usage: { ...agent?.usage, input: (agent?.usage.input ?? 0) + 1 } });
+    expect(stops([source], database)).toThrow("the manifest's input tokens for A disagree with calls.jsonl");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a match directory the schedule does not list stops the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+
+    cpSync(join(source, "a_b_b0_p0"), join(source, "a_b_b0_p1"), { recursive: true });
+    expect(stops([source], join(root, "analysis.sqlite"))).toThrow("a match directory the schedule does not list");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a source file imported before that is gone stops the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+
+    importTournaments({ database, sources: [source] });
+    rmSync(join(source, "a_b_b0_p0", "calls.jsonl"));
+    expect(stops([source], database)).toThrow("a source file imported before is gone");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("two different moves logged under one sequence stop the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+    const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
+    const lines = readFileSync(eventsPath, "utf8").split("\n");
+    const first = lines.findIndex((line) => line.includes('"kind":"move"'));
+
+    lines.splice(first + 1, 0, JSON.stringify({ ...readMove(lines[first] ?? ""), label: "Another move" }));
+    writeFileSync(eventsPath, lines.join("\n"));
+    expect(stops([source], join(root, "analysis.sqlite"))).toThrow("two different moves logged as seq:");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a manifest whose provenance lacks the instructions hash, or whose move log hash differs from the logged moves, stops the import", () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const manifest = readRun(manifestPath);
+    const { instructions_sha: _instructions, ...provenance } = Schema.decodeUnknownSync(loose({ instructions_sha: Schema.String }))(manifest.provenance);
+
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, provenance }));
+    expect(stops([source], database)).toThrow("the manifest's provenance does not decode");
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, move_log_sha: "000000000000" }));
+    expect(stops([source], database)).toThrow("the manifest's move log hash is not the hash of the logged moves");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    importTournaments({ database, sources: [source] });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

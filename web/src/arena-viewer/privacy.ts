@@ -1,6 +1,7 @@
 import { Result, Schema } from "effect";
 
-import { AGGREGATE_NAMES, AGGREGATES, type AggregateName, Summary } from "./aggregates.ts";
+import { AGGREGATE_NAMES, AGGREGATES, Summary } from "./aggregates.ts";
+import type { AggregateName } from "./aggregates.ts";
 import { ITEMS, OpportunityType } from "./api.ts";
 
 // The last gate before the aggregate files leave this machine: they must hold per-config and per-pair numbers only,
@@ -9,7 +10,7 @@ import { ITEMS, OpportunityType } from "./api.ts";
 
 export const Manifest = Schema.Struct({
   generated: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
-  files: Schema.Array(Schema.Struct({ name: Schema.Literals(AGGREGATE_NAMES), bytes: Schema.Number })),
+  files: Schema.Array(Schema.Struct({ name: Schema.Literals(AGGREGATE_NAMES), bytes: Schema.Finite })),
 });
 
 export type Manifest = typeof Manifest.Type;
