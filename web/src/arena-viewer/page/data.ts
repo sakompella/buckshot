@@ -158,6 +158,9 @@ export const fmtUsd = (value: number | null | undefined): string => {
   return value >= 0.01 ? `$${value.toFixed(3)}` : `$${value.toFixed(4)}`;
 };
 
+/** A count rounded down to the thousand, with a plus: 5,432 reads "5,000+". */
+export const fmtThousandsPlus = (value: number): string => `${(Math.floor(value / 1000) * 1000).toLocaleString()}+`;
+
 export const fmtCount = (value: number | null | undefined): string => {
   if (value === null || value === undefined) { return "–"; }
 

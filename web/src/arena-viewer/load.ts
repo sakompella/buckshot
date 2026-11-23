@@ -22,7 +22,7 @@ import { ScriptError } from "../script.ts";
 
 const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
      sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
-     sum(latency_ms) lat,
+     sum(case when status = 'returned' then latency_ms end) lat,
      sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
      sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool,
      sum(status = 'returned') returned, sum(status = 'returned' and reasoning_tokens is null) rtUnreported

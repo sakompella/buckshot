@@ -6,7 +6,7 @@ import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import { effortParts } from "../../arena/same-treatment.ts";
 import { aboutView, footerView, howView, leadFinding, summaryView } from "./about.ts";
-import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtCount, fmtThousandsPlus, isFixedPlayer, splitKey, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView } from "./certain.ts";
 import type { CertainLinks } from "./certain.ts";
@@ -86,7 +86,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
 };
 
 const heroView = (h: H, derived: Derived): Html => {
-  const scored = sumOf(derived.pairs.map((pair) => pair.scored));
+  const modelMatches = sumOf(derived.pairs.filter(({ first, second }) => !isFixedPlayer(splitKey(first)[0]) || !isFixedPlayer(splitKey(second)[0])).map((pair) => pair.scored));
   const stat = (label: string, value: string) => [h.dt([], [label]), h.dd([], [value])];
   const finding = leadFinding(derived);
 
@@ -104,7 +104,7 @@ const heroView = (h: H, derived: Derived): Html => {
       h.dl(
         [h.Class("stats")],
         [
-          ...stat("scored matches", scored.toLocaleString()),
+          ...stat("model matches", fmtThousandsPlus(modelMatches)),
           ...stat("configs", String(heatRowsOf(derived).length)),
           ...stat("model moves", fmtCount(sumOf(derived.pooled.map(({ startedMoves }) => startedMoves)))),
           ...stat("list-price cost", `$${Math.round(sumOf(derived.pooled.map(({ totalCost }) => totalCost))).toLocaleString()}`),

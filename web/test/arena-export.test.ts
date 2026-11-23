@@ -1,10 +1,12 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { importTournaments } from "../src/analysis/import.ts";
+import { openArena } from "../src/arena-viewer/load.ts";
 import { privacyViolations } from "../src/arena-viewer/privacy.ts";
 import { playFauxRun } from "./faux-run.ts";
 import { readManifest } from "./json-file.ts";
@@ -167,4 +169,28 @@ test("the export needs a luck file that covers both seats of every scored match,
 
   expect([covered.code, covered.stderr]).toEqual([0, ""]);
   expect(readFileSync(join(out, "manifest.json"), "utf8")).toMatch(/"sources":\{"luck":"sha256:[0-9a-f]{64}","certain":null\}/);
+});
+
+const latencyOf = (path: string) => Effect.runSync(openArena(path)).seats.map(({ lat }) => lat);
+
+test("a failed call, such as a 429 usage-limit reply, adds nothing to a seat's latency", () => {
+  const copy = join(root, "with-429.sqlite");
+
+  cpSync(database, copy);
+
+  const db = new Database(copy);
+  const { n } = db.query<{ readonly n: number }, []>("select count(*) n from calls where status = 'returned'").get() ?? { n: 0 };
+
+  expect(n).toBeGreaterThan(0);
+  db.run("update calls set latency_ms = 100 where status = 'returned'");
+
+  const before = latencyOf(copy);
+
+  db.run(`insert into calls (id, match_id, decision_id, ordinal, player, position, model, provider, api, t, status, error, stop_reason, latency_ms, reasoning_text, reasoning_provenance, response_text, tool_calls_json, usage_json, source_record)
+    select id || '-429', match_id, decision_id, ordinal + 1000, player, position, model, provider, api, t, 'failed', '429 usage limit', 'error', 1000000, '', '', '', '[]', '{}', source_record from calls`);
+  expect(db.query("select count(*) n from calls where status = 'failed'").get()).toEqual({ n });
+  db.close();
+
+  expect(before.some((lat) => (lat ?? 0) > 0)).toBe(true);
+  expect(latencyOf(copy)).toEqual(before);
 });

@@ -267,7 +267,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     db
       .query(
         `select decision_id d, sum(reasoning_tokens) rt, sum(reasoning_tokens is null) nulls,
-           sum(coalesce(output_tokens, 0)) out, sum(cost_usd) cost, sum(latency_ms) lat,
+           sum(coalesce(output_tokens, 0)) out, sum(cost_usd) cost, sum(case when status = 'returned' then latency_ms end) lat,
            sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0)) tok
          from calls where decision_id is not null group by decision_id`,
       )
