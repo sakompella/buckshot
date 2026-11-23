@@ -1,5 +1,5 @@
 import { clampThinkingLevel, createProvider } from "@earendil-works/pi-ai";
-import type { Api, Model, ModelThinkingLevel, Provider, ProviderStreams } from "@earendil-works/pi-ai";
+import type { Api, Model, Provider, ProviderStreams } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { DEFAULT_THINKING_BUDGETS } from "@earendil-works/pi-ai/api/simple-options";
@@ -9,6 +9,7 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type { ModelRef } from "@earendil-works/pi-durable";
 import { Config, Effect, Option, Redacted, Schema } from "effect";
 
+import { THINKING_LEVELS } from "./agent.ts";
 import type { AgentId } from "./agent.ts";
 import { configLabel } from "./model-names.ts";
 
@@ -32,8 +33,6 @@ import { configLabel } from "./model-names.ts";
 // opencode/deepseek-v4.1-flash for an endpoint that serves it on the OpenAI
 // Responses API. Keys stay Redacted until pi-ai asks for them, so no error or
 // log can show one.
-
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies ReadonlyArray<ModelThinkingLevel>;
 
 const EndpointFields = {
   url: Schema.URL,

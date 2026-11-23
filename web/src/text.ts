@@ -1,9 +1,9 @@
-import { Match } from "effect";
+import { Match, Option } from "effect";
 
 import type { BendContractError, NoPrompt, StaleAnswer } from "./bend.ts";
 import { GameEvent, Move, Secret } from "./domain.ts";
-import type { Item, Seat } from "./domain.ts";
-import type { Roster } from "./players.ts";
+import type { Item, LearnedSecret, Seat } from "./domain.ts";
+import type { Letter, Roster } from "./players.ts";
 
 // The words the UI and the agent tools both use for players, items, moves and events.
 
@@ -127,3 +127,11 @@ export const secretShout = (secret: Secret): string =>
     NoClue: () => "No clue",
     EmptyBriefcase: () => "Briefcase empty",
   });
+
+/** What a player has been shown, verbatim, as the arena delivers it: its secrets and the public events, in order. */
+export const heardBy = (source: { readonly events: ReadonlyArray<GameEvent>; readonly learned: ReadonlyArray<LearnedSecret> }, roster: Roster, player: Letter): ReadonlyArray<string> => {
+  const seat = Option.getOrThrow(roster.find(player)).seat;
+  const heardAt = (at: number) => source.learned.flatMap((note) => (note.seat === seat && note.at === at ? [secretText(note.secret)] : []));
+
+  return [...heardAt(0), ...source.events.flatMap((event, index) => [eventText(roster, event), ...heardAt(index + 1)])];
+};

@@ -11,8 +11,7 @@ import { certainAt, emptyLedger, itemMoveOf, knowledgeOf, knownText, ledgerMisma
 import type { Knowledge, Ledger } from "../src/analysis/knowledge.ts";
 import { loadPlayer } from "../src/analysis/player.ts";
 import { shortName } from "../src/arena-viewer/page/data.ts";
-import { RunManifest } from "../src/arena/match.ts";
-import { MoveLine } from "../src/arena/runlog.ts";
+import { MoveLine, RunManifest } from "../src/arena/runlog.ts";
 import { GameEvent, Secret } from "../src/domain.ts";
 import type { Seat } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";

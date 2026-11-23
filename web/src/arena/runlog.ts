@@ -4,8 +4,9 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Option, Schema } from "effect";
 
+import { Controller } from "../driver.ts";
 import { Letter } from "../players.ts";
-import { AgentId } from "./agent.ts";
+import { AgentId, EngineSeat } from "./agent.ts";
 
 // A match's run directory, in the agent-ts layout: calls.jsonl (one line per
 // model reply), events.jsonl (what the arena did) and manifest.json. Usage is
@@ -56,6 +57,56 @@ const Sitting = { agent: Schema.optional(AgentId), player: Letter, position: Sch
 export const Standing = Schema.Struct({ player: Letter, cash: Schema.Finite, controller: Schema.NullOr(Schema.String) });
 
 export type Standing = typeof Standing.Type;
+
+/**
+ * How a player's log reaches it. "on-turn": the entries since its last delivery come with its next turn. "live": each
+ * change is written into its context as it happens, with no model call, and its turn brings only the view.
+ */
+export const DELIVERIES = ["on-turn", "live"] as const;
+
+export type Delivery = (typeof DELIVERIES)[number];
+
+/** Who plays one position, as the arena sees it: a controller, or an engine with its depth and budget. */
+export const ArenaController = Schema.Union([Controller, EngineSeat]);
+
+export type ArenaController = typeof ArenaController.Type;
+
+/** The controllers the rules machine is given: it plays the bots, and the arena plays every other seat through the tools, as an Agent. */
+export const machineControllers = (controllers: ReadonlyArray<ArenaController>): Array<Controller> => controllers.map((controller) => (controller === "DoN" || controller === "Story" ? controller : "Agent"));
+
+/** The fields of manifest.json that readers of a run, such as the viewer, decode. */
+export const RunManifest = Schema.Struct({
+  format: Schema.Literal(RUN_FORMAT),
+  status: Schema.Literals(["running", "finished"]),
+  seed: Schema.String,
+  /** By position, in table order. */
+  controllers: Schema.Array(ArenaController),
+  letters: Schema.Array(Letter),
+  /** By position; absent in matches from before labels were recorded. */
+  labels: Schema.optional(Schema.Array(Schema.String)),
+  delivery: Schema.Literals(DELIVERIES),
+  /** By agent: its position, endpoint and totals, the same shape while running and once finished. The totals are zero at start. */
+  agents: Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      position: Schema.Int,
+      endpoint: Schema.Json,
+      models: Schema.Array(Schema.String),
+      model_calls: Schema.Int,
+      tool_calls: Schema.Int,
+      moves: Schema.optionalKey(Schema.Int),
+      reminders: Schema.optionalKey(Schema.Int),
+      interventions: Schema.optionalKey(Schema.Int),
+      usage: Schema.Record(Schema.String, Schema.Finite),
+      latency_ms: Schema.Struct({ total: Schema.Finite, max: Schema.Finite }),
+      wall_ms: Schema.Finite,
+    }),
+  ),
+  provenance: Schema.optional(Schema.Json),
+  standings: Schema.optional(Schema.Array(Standing)),
+});
+
+export type RunManifest = typeof RunManifest.Type;
 
 /** A move the arena journaled: an agent's or a human's own, a forced "Grab an item", or the fallback (an intervention) after a turn with no move. */
 export const MoveLine = Schema.Struct({

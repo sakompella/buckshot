@@ -12,23 +12,22 @@ import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite
 import { int, obj } from "@earendil-works/pi-schema";
 import { Console, Effect, Option, Predicate, Result, Schema } from "effect";
 
-import { emptyTable, headlessSession } from "../agent/headless.ts";
+import { emptyTable, letteredSession } from "../agent/headless.ts";
 import type { HeadlessTable } from "../agent/headless.ts";
 import { AgentReply, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import type { AgentCall, MatchSession } from "../agent/tools.ts";
-import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { nextPrompt, PRIZES } from "../bend.ts";
-import { Controller, controllerOf, promptsOf } from "../driver.ts";
+import { controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
-import { eventText, secretText } from "../text.ts";
-import { AGENTS, EngineSeat, isEngine } from "./agent.ts";
-import type { AgentId } from "./agent.ts";
+import { heardBy } from "../text.ts";
+import { AGENTS, isEngine } from "./agent.ts";
+import type { AgentId, EngineSeat } from "./agent.ts";
 import { openEngine } from "./engine.ts";
 import type { Engine, EngineIdentity } from "./engine.ts";
 import { AgentProvenance } from "./endpoints.ts";
 import type { HumanLink } from "./human.ts";
-import { addTokens, agentTotals, dropPartialLine, entriesSentTo, exportedSeqs, logCall, logEvent, readCalls, RUN_FORMAT, Standing, writeManifest } from "./runlog.ts";
-import type { Sitting } from "./runlog.ts";
+import { addTokens, agentTotals, dropPartialLine, entriesSentTo, exportedSeqs, logCall, logEvent, machineControllers, readCalls, RUN_FORMAT, writeManifest } from "./runlog.ts";
+import type { ArenaController, Delivery, Sitting } from "./runlog.ts";
 
 // One match in one process: the headless table, one pi-durable conversation per
 // agent in the run directory's session.sqlite, and one terminal per human. The
@@ -69,24 +68,8 @@ const ITEM_FACTS = [
 /** The shared instructions every player gets. An agent may get an addendum after them (agentInstructions); no one gets a different version. */
 export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player letter; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves, each with its number. Play one with play_move, giving its number and the turn. Make exactly one play_move call per reply. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
 
-/**
- * How a player's log reaches it. "on-turn": the entries since its last delivery come with its next turn. "live": each
- * change is written into its context as it happens, with no model call, and its turn brings only the view.
- */
-export const DELIVERIES = ["on-turn", "live"] as const;
-
-export type Delivery = (typeof DELIVERIES)[number];
-
 /** The instructions one agent's conversation starts with: the shared ones, then its addendum if its entrant has one. */
 export const agentInstructions = ({ provenance }: Pick<Entrant, "provenance">): string => (provenance.instructions_addendum === undefined ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${provenance.instructions_addendum}`);
-
-/** Who plays one position, as the arena sees it: a controller, or an engine with its depth and budget. */
-export const ArenaController = Schema.Union([Controller, EngineSeat]);
-
-export type ArenaController = typeof ArenaController.Type;
-
-/** The controllers the rules machine is given: it plays the bots, and the arena plays every other seat through the tools, as an Agent. */
-export const machineControllers = (controllers: ReadonlyArray<ArenaController>): Array<Controller> => controllers.map((controller) => (controller === "DoN" || controller === "Story" ? controller : "Agent"));
 
 /** One agent: its letter, its config's label, the model it plays with, and its provenance, which the match fixes when it starts. */
 export interface Entrant {
@@ -173,10 +156,11 @@ const emptyMatch = (): JournalState => ({ seed: "", controllers: [], letters: []
 /** How many entries of its log a player has been sent. */
 const sentCount = (state: MatchState, player: Letter): number => state.deliveries.reduce((sent, line) => (line.player === player ? line.from + line.count : sent), 0);
 
+const isAgent = (controller: ArenaController) => controller === "Agent";
+
 /** The letter at each position: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
 const lettersOf = (controllers: ReadonlyArray<ArenaController>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
   const spare = AGENTS.filter((letter) => !agents.includes(letter));
-  const isAgent = (controller: ArenaController) => controller === "Agent";
 
   if (controllers.filter(isAgent).length !== agents.length) { return Option.none(); }
 
@@ -223,14 +207,6 @@ const decode = (name: string, input: Schema.Json): AgentCall => {
 };
 
 type Played = { readonly ok: true; readonly text: string; readonly line: MoveLine } | { readonly ok: false; readonly text: string };
-
-/** The headless tools, with each seat named by the journal's letters instead of table order. */
-export const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
-  const seats = SEATS_BY_TABLE[Schema.decodeUnknownSync(SeatCount)(letters.length)];
-  const assignment = new Map(seats.flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
-
-  return { ...headlessSession, current: (table) => Option.map(headlessSession.current(table), (match) => ({ ...match, letters: assignment })) };
-};
 
 /** A value that changes over time, kept behind two methods so what holds it stays readonly. */
 interface Cell<A> {
@@ -358,12 +334,7 @@ class Table {
 
   /** What a seat has been shown, verbatim: its secrets and the public events, in order, up to now. */
   heard(player: Letter): ReadonlyArray<string> {
-    const { events, learned } = this.match();
-    const roster = this.roster();
-    const seat = this.seatOf(player);
-    const heardAt = (at: number) => learned.flatMap((note) => (note.seat === seat && note.at === at ? [secretText(note.secret)] : []));
-
-    return [...heardAt(0), ...events.flatMap((event, index) => [eventText(roster, event), ...heardAt(index + 1)])];
+    return heardBy(this.match(), this.roster(), player);
   }
 }
 
@@ -461,40 +432,6 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
       }),
     ],
   });
-
-/** The fields of manifest.json that readers of a run, such as the viewer, decode. */
-export const RunManifest = Schema.Struct({
-  format: Schema.Literal(RUN_FORMAT),
-  status: Schema.Literals(["running", "finished"]),
-  seed: Schema.String,
-  /** By position, in table order. */
-  controllers: Schema.Array(ArenaController),
-  letters: Schema.Array(Letter),
-  /** By position; absent in matches from before labels were recorded. */
-  labels: Schema.optional(Schema.Array(Schema.String)),
-  delivery: Schema.Literals(DELIVERIES),
-  /** By agent: its position, endpoint and totals, the same shape while running and once finished. The totals are zero at start. */
-  agents: Schema.Record(
-    Schema.String,
-    Schema.Struct({
-      position: Schema.Int,
-      endpoint: Schema.Json,
-      models: Schema.Array(Schema.String),
-      model_calls: Schema.Int,
-      tool_calls: Schema.Int,
-      moves: Schema.optionalKey(Schema.Int),
-      reminders: Schema.optionalKey(Schema.Int),
-      interventions: Schema.optionalKey(Schema.Int),
-      usage: Schema.Record(Schema.String, Schema.Finite),
-      latency_ms: Schema.Struct({ total: Schema.Finite, max: Schema.Finite }),
-      wall_ms: Schema.Finite,
-    }),
-  ),
-  provenance: Schema.optional(Schema.Json),
-  standings: Schema.optional(Schema.Array(Standing)),
-});
-
-export type RunManifest = typeof RunManifest.Type;
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 12);
 

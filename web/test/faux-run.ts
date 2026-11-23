@@ -5,7 +5,7 @@ import { Effect, Schema } from "effect";
 import { AGENTS } from "../src/arena/agent.ts";
 import type { AgentProvenance } from "../src/arena/endpoints.ts";
 import { playMatch } from "../src/arena/match.ts";
-import type { Delivery } from "../src/arena/match.ts";
+import type { Delivery } from "../src/arena/runlog.ts";
 import type { Controller } from "../src/driver.ts";
 
 // A finished arena run that costs nothing: faux pi-ai models that answer each

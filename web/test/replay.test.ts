@@ -9,7 +9,7 @@ import { Option, Result, Schema } from "effect";
 
 import { decodeEventLine, movesOf, readJsonl } from "../src/arena/jsonl.ts";
 import type { JsonlLine } from "../src/arena/jsonl.ts";
-import { RunManifest } from "../src/arena/match.ts";
+import { RunManifest } from "../src/arena/runlog.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 

@@ -9,18 +9,16 @@ import { agentGame } from "../agent/view.ts";
 import { costOf, DEFAULT_PRICES, loadPrices } from "../arena/cost.ts";
 import { AgentId } from "../arena/agent.ts";
 import { configLabel } from "../arena/model-names.ts";
-import { RunManifest } from "../arena/match.ts";
-import { CallLine, EventLine } from "../arena/runlog.ts";
+import { CallLine, EventLine, RunManifest } from "../arena/runlog.ts";
 import type { MoveLine } from "../arena/runlog.ts";
 import { MatchManifest, manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
 import { winShares } from "../arena/tournament-stats.ts";
 import { replayOf } from "../arena/replay.ts";
 import type { Replay } from "../arena/replay.ts";
 import { modelEntrant } from "../arena/tournament.ts";
-import type { GameEvent, LearnedSecret } from "../domain.ts";
 import { rosterOf } from "../players.ts";
-import type { Letter, Roster } from "../players.ts";
-import { eventText, secretText } from "../text.ts";
+import type { Letter } from "../players.ts";
+import { heardBy } from "../text.ts";
 import { IMPORTER_FILES, IMPORTER_HASH } from "./importer-hash.ts";
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -73,14 +71,6 @@ const cohortOf = (tournament: string, tiers: string | undefined, declared: strin
 const EXCLUDED_MODEL = "deepseek";
 
 const EXCLUSION = "a DeepSeek seat: its free tier refused requests, so its scored games are not a random sample of what was scheduled";
-
-/** What a seat was shown, as the arena renders it (match.ts `heard`): its secrets and the public events, in order. */
-const heardBy = (source: { readonly events: ReadonlyArray<GameEvent>; readonly learned: ReadonlyArray<LearnedSecret> }, roster: Roster, player: Letter): ReadonlyArray<string> => {
-  const seat = Option.getOrThrow(roster.find(player)).seat;
-  const heardAt = (at: number) => source.learned.flatMap((note) => (note.seat === seat && note.at === at ? [secretText(note.secret)] : []));
-
-  return [...heardAt(0), ...source.events.flatMap((event, index) => [eventText(roster, event), ...heardAt(index + 1)])];
-};
 
 /** Why a finished manifest can't be scored: its standings must cover each seated player exactly once. */
 const scoringProblem = (standings: ReadonlyArray<{ readonly player: string }> | undefined, players: ReadonlyArray<string>): string | undefined => {

@@ -47,7 +47,7 @@ export const matchLog = (db: Database, matchId: string): MatchLog => {
   };
 };
 
-/** What a socket heard while the events out went from `from` to `to`: each event, then the secrets it learned once that event was out (import.ts heardBy). */
+/** What a socket heard while the events out went from `from` to `to`: each event, then the secrets it learned once that event was out (text.ts heardBy). */
 export const heardBetween = (log: MatchLog, socket: Seat, from: number, to: number): ReadonlyArray<Heard> =>
   log.events.slice(from, to).flatMap((event, offset) => [event, ...log.secrets.flatMap((note) => (note.socket === socket && note.at === from + offset + 1 ? [note.secret] : []))]);
 

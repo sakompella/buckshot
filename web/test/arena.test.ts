@@ -13,9 +13,9 @@ import { AGENTS, AgentId } from "../src/arena/agent.ts";
 import { agentEndpoint, provenanceOf, providerOf } from "../src/arena/endpoints.ts";
 import type { AgentProvenance } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
-import { DELIVERIES, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
-import type { Delivery } from "../src/arena/match.ts";
-import { entriesSentTo } from "../src/arena/runlog.ts";
+import { INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
+import { DELIVERIES, entriesSentTo } from "../src/arena/runlog.ts";
+import type { Delivery } from "../src/arena/runlog.ts";
 import type { Controller } from "../src/driver.ts";
 import { fauxProvenance } from "./faux-run.ts";
 

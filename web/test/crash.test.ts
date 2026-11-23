@@ -7,8 +7,7 @@ import { join } from "node:path";
 
 import { Option, Result, Schema } from "effect";
 
-import { RunManifest } from "../src/arena/match.ts";
-import { entriesSentTo } from "../src/arena/runlog.ts";
+import { entriesSentTo, RunManifest } from "../src/arena/runlog.ts";
 import { decodeEventLine, movesOf, readJsonl } from "../src/arena/jsonl.ts";
 import { replayOf } from "../src/arena/replay.ts";
 

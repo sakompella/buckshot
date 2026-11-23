@@ -1,9 +1,8 @@
 import { Redacted, Result, Schema } from "effect";
 
-import { AgentId, EngineSeat } from "./agent.ts";
+import { AgentId, EngineSeat, THINKING_LEVELS } from "./agent.ts";
 import type { PriceTable } from "./cost.ts";
-import { THINKING_LEVELS } from "./endpoints.ts";
-import { DELIVERIES } from "./match.ts";
+import { DELIVERIES } from "./runlog.ts";
 
 // A tournament: a config, the schedule it expands to, and what the runner needs
 // to start one match as a child process. Everything here is pure. Reading and

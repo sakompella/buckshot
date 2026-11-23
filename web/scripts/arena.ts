@@ -6,7 +6,8 @@ import { Console, Effect, Random, Schema } from "effect";
 import { AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
 import { agentEndpoint, labelOf, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
-import { DELIVERIES, playMatch } from "../src/arena/match.ts";
+import { playMatch } from "../src/arena/match.ts";
+import { DELIVERIES } from "../src/arena/runlog.ts";
 import type { Letter } from "../src/players.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 

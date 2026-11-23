@@ -1,12 +1,13 @@
 import { randomInt } from "node:crypto";
 
-import { Array as Arr, Option, Result } from "effect";
+import { Array as Arr, Option, Result, Schema } from "effect";
 
-import { SEATS_BY_TABLE } from "../domain.ts";
+import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { begin, playAis } from "../driver.ts";
 import type { Controller, Progress } from "../driver.ts";
 import { seedRng } from "../rng.ts";
 import { rosterOf } from "../players.ts";
+import type { Letter } from "../players.ts";
 import { describeError } from "../text.ts";
 import { playChain } from "./moves.ts";
 import type { Applied, MatchSession, MatchSetup } from "./tools.ts";
@@ -74,3 +75,11 @@ const move = (table: HeadlessTable, { seat, chain }: SeatMove): Applied<Headless
   });
 
 export const headlessSession: MatchSession<HeadlessTable> = { current: (table) => table.maybeMatch, turn: (table) => table.turn, start, move };
+
+/** The headless tools, with each seat named by a match's letters instead of by table order. */
+export const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
+  const seats = SEATS_BY_TABLE[Schema.decodeUnknownSync(SeatCount)(letters.length)];
+  const assignment = new Map(seats.flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
+
+  return { ...headlessSession, current: (table) => Option.map(headlessSession.current(table), (match) => ({ ...match, letters: assignment })) };
+};

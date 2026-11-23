@@ -7,9 +7,8 @@ import { Option, Result, Schema } from "effect";
 
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
 import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
-import { RunManifest } from "../src/arena/match.ts";
+import { MoveLine, RunManifest } from "../src/arena/runlog.ts";
 import { replayOf } from "../src/arena/replay.ts";
-import { MoveLine } from "../src/arena/runlog.ts";
 import { playFauxRun } from "./faux-run.ts";
 import { Agents, loose, readJson, readManifest } from "./json-file.ts";
 

@@ -1,3 +1,4 @@
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { Schema } from "effect";
 
 import { Letter } from "../players.ts";
@@ -11,6 +12,9 @@ export const AgentId = Letter;
 export type AgentId = Letter;
 
 export const AGENTS: ReadonlyArray<AgentId> = AgentId.literals;
+
+/** The thinking levels an agent's endpoint or entrant may ask for. */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies ReadonlyArray<ModelThinkingLevel>;
 
 /** Who sits at each position, in table order: the seats in order, rotated left by `rotation`. */
 export const seatingOf = <A>(seats: ReadonlyArray<A>, rotation: number): ReadonlyArray<A> => {

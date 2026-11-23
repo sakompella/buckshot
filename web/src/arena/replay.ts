@@ -1,15 +1,14 @@
 import type { Schema } from "effect";
 import { Option, Result } from "effect";
 
-import { emptyTable } from "../agent/headless.ts";
+import { emptyTable, letteredSession } from "../agent/headless.ts";
 import type { HeadlessTable } from "../agent/headless.ts";
 import { AgentReply, replyText, runTool, tools } from "../agent/tools.ts";
 import type { AgentCall, MatchSession } from "../agent/tools.ts";
 import { agentGame } from "../agent/view.ts";
 import type { AgentSource } from "../agent/view.ts";
-import { letteredSession, machineControllers } from "./match.ts";
-import type { RunManifest } from "./match.ts";
-import type { MoveLine } from "./runlog.ts";
+import { machineControllers } from "./runlog.ts";
+import type { MoveLine, RunManifest } from "./runlog.ts";
 import { Counter, seatsOut } from "../domain.ts";
 import { rosterOf } from "../players.ts";
 import type { Letter } from "../players.ts";
