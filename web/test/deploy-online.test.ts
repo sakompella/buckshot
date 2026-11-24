@@ -71,14 +71,20 @@ test("a page without the post, an arena still served, a data file that differs a
   expect(problems.some((problem) => problem.startsWith("/data/items.json: status 200, text/html"))).toBe(true);
 });
 
-test("a file in web/online beside the site's own is refused before an upload", () => {
-  const online = new Map([["_headers", ""], ["404.html", ""], ["og.png", ""], ...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/private-debug.json", "{}"], ["notes.txt", ""]]);
+test("a file in web/online beside the site's own, its fonts and its data is refused before an upload", () => {
+  const online = new Map([
+    ["_headers", ""], ["404.html", ""], ["og.png", ""], ["fonts/ebg-400.woff", ""], ["fonts/cousine-700.woff", ""],
+    ...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const),
+    ["data/private-debug.json", "{}"], ["notes.txt", ""], ["fonts/notes.txt", ""], ["fonts/nested/ebg-400.woff", ""],
+  ]);
 
   const problems = uploadProblems(online);
 
   expect(problems).toContain("notes.txt: not part of the site");
+  expect(problems).toContain("fonts/notes.txt: not part of the site");
+  expect(problems).toContain("fonts/nested/ebg-400.woff: not part of the site");
   expect(problems).toContain("private-debug: not an export file");
-  expect(problems.filter((problem) => /^(_headers|404\.html|og\.png):/.test(problem))).toEqual([]);
+  expect(problems.filter((problem) => /^(_headers|404\.html|og\.png|fonts\/\w+-\d+\.woff):/.test(problem))).toEqual([]);
 });
 
 const withFindings = (findings: string) => uploadProblems(new Map([...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/findings.json", findings]]));

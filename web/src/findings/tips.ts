@@ -1,7 +1,39 @@
 import "./styles.css";
 
-// Tooltips for the figures' marks: each `[data-tip]` mark shows its text on mouse hover, keyboard focus or a tap, a tap
-// docking it as a bottom sheet. Esc or a tap elsewhere hides it. A cost-chart mark also lights its family's line.
+// The page's script. The theme button switches `data-theme` on <html> between light and dark, starting from a saved
+// choice or the system's. Each figure mark with `data-tip` shows its text on mouse hover, keyboard focus or a tap, a tap
+// docking it as a bottom sheet; Esc or a tap elsewhere hides it. A scatter mark also lights its model's line.
+
+const THEME_KEY = "theme";
+
+const themeButton = document.getElementById("theme");
+
+const applyTheme = (theme: "light" | "dark"): void => {
+  document.documentElement.dataset.theme = theme;
+  themeButton?.setAttribute("aria-pressed", String(theme === "dark"));
+};
+
+const saved = localStorage.getItem(THEME_KEY);
+
+applyTheme(saved === "light" || saved === "dark" ? saved : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+
+themeButton?.addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+
+/** The full table sits folded at the bottom; a link to it unfolds it. */
+const openTarget = (): void => {
+  const target = location.hash === "" ? null : document.getElementById(location.hash.slice(1));
+
+  if (target instanceof HTMLDetailsElement) { target.open = true; }
+};
+
+window.addEventListener("hashchange", openTarget);
+
+openTarget();
 
 const tip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "tip", role: "tooltip", hidden: true }));
 

@@ -15,10 +15,10 @@ const LINE_LABELS: Readonly<Record<Layout, Readonly<Record<Group | "search", str
   narrow: { strong: "Strong", search: "Search", haiku: "Haiku", luna: "Luna" },
 };
 
-/** Where the main panel sits in each layout, and where the effort panel starts. */
+/** Where the main panel and the effort panel sit in each layout. */
 const FRAME = {
-  wide: { width: 960, height: 400, left: 48, right: 600, top: 40, bottom: 340, panelX: 668, panelTop: 40, panelWidth: 280, rowGap: 40 },
-  narrow: { width: 360, height: 560, left: 34, right: 350, top: 34, bottom: 262, panelX: 8, panelTop: 330, panelWidth: 344, rowGap: 28 },
+  wide: { width: 960, height: 400, left: 48, right: 604, top: 44, bottom: 340, panelX: 700, panelRight: 944, panelTop: 44, panelBottom: 340 },
+  narrow: { width: 360, height: 580, left: 36, right: 350, top: 40, bottom: 268, panelX: 36, panelRight: 350, panelTop: 372, panelBottom: 540 },
 } as const;
 
 const DRAWN: ReadonlyArray<Group> = ["luna", "haiku", "strong"];
@@ -34,7 +34,7 @@ interface Dot {
 }
 
 const modelTip = (point: CurvePoint): string =>
-  `${GROUP_NAMES[point.group]} at P(live) ${point.pLabel} \u00b7 shot themselves on ${pct(point.modelRate)} ${pctInterval(point.modelLo, point.modelHi)} of ${point.n.toLocaleString("en-US")} clean shots \u00b7 depth-7 search on the same states ${pct(point.searchRate)} ${pctInterval(point.searchLo, point.searchHi)}`;
+  `${GROUP_NAMES[point.group]} at P(live) ${point.pLabel} \u00b7 shot themselves on ${pct(point.modelRate)} ${pctInterval(point.modelLo, point.modelHi)} of ${point.n.toLocaleString("en-US")} plain shots \u00b7 depth-7 search on the same states ${pct(point.searchRate)} ${pctInterval(point.searchLo, point.searchHi)}`;
 
 const searchTip = (point: CurvePoint): string =>
   `Depth-7 search on the strong models' states at P(live) ${point.pLabel} \u00b7 prefers shooting itself on ${pct(point.searchRate)} ${pctInterval(point.searchLo, point.searchHi)} of ${point.n.toLocaleString("en-US")} shots`;
@@ -91,8 +91,8 @@ const mainPanel = (curve: ReadonlyArray<CurvePoint>, layout: Layout): string => 
     ...y.ticks.map((tick) => line(frame.left, y.at(tick), frame.right, y.at(tick), ' class="grid"') + svgText(frame.left - 6, y.at(tick) + 4, pct(tick, 0), ' class="tick" text-anchor="end"')),
     ...pValues.map(([p, label]) => line(x.at(p), frame.bottom, x.at(p), frame.bottom + 4, ' class="axis"') + svgText(x.at(p), frame.bottom + 17, label, ' class="tick" text-anchor="middle"')),
     line(half, frame.top - 4, half, frame.bottom, ' class="rule"'),
-    svgText(half + 6, frame.top - 9, "even odds", ' class="note" text-anchor="start"'),
-    svgText(frame.left, frame.top - 22, "% of clean shots aimed at self", ' class="title"'),
+    svgText(half + 6, frame.top - 9, "50% live", ' class="note" text-anchor="start"'),
+    svgText(frame.left, frame.top - 22, "% of plain shots aimed at self", ' class="title"'),
     svgText((frame.left + frame.right) / 2, frame.bottom + 36, layout === "wide" ? "Chance the chambered shell is live, P(live)" : "P(live) of the chambered shell", ' class="axis-title" text-anchor="middle"'),
     ...whiskers,
     `<path class="s-search" d="${pathOf(strong.map((point) => [x.at(point.pLive), y.at(point.searchRate)]))}"/>`,
@@ -103,42 +103,42 @@ const mainPanel = (curve: ReadonlyArray<CurvePoint>, layout: Layout): string => 
 };
 
 const effortTip = (row: EffortRow): string =>
-  `Sonnet 5.5 \u00b7 ${row.effort} \u00b7 shot itself on ${pct(row.modelRate)} of ${row.n} clean shots below even odds \u00b7 depth-7 search ${pct(row.searchRate)} \u00b7 gap ${points(row.gap)} ${pointsInterval(row.gapLo, row.gapHi)} points`;
+  `Sonnet 5.5 \u00b7 ${row.effort} \u00b7 shot itself on ${pct(row.modelRate)} of ${row.n} plain shots below 50% live \u00b7 depth-7 search ${pct(row.searchRate)} \u00b7 gap ${points(row.gap)} ${pointsInterval(row.gapLo, row.gapHi)} points`;
 
+/** Sonnet 5.5's self-shot rate below 50% live at each effort, against the search on the same shots. */
 const effortPanel = (rows: ReadonlyArray<EffortRow>, layout: Layout): string => {
   const frame = FRAME[layout];
-  const labelWidth = 112;
-  const x = linScale(0, 1, frame.panelX + labelWidth, frame.panelX + frame.panelWidth - 12, [0, 0.5, 1]);
-  const rowY = (index: number) => frame.panelTop + 58 + index * frame.rowGap;
-  const axisY = rowY(rows.length - 1) + frame.rowGap * 0.7;
-  const best = rows.at(-1)?.effort;
+  const { panelX, panelRight, panelTop, panelBottom } = frame;
+  const step = (panelRight - panelX - 36) / Math.max(1, rows.length - 1);
+  const xAt = (index: number) => panelX + 24 + index * step;
+  const y = linScale(0, 1, panelBottom, panelTop, [0, 0.5, 1]);
+  const first = rows[0];
+  const last = rows.at(-1);
+
+  const ends = [
+    first === undefined ? "" : svgText(xAt(0) - 4, y.at(first.modelRate) - 11, `${first.effort} ${pct(first.modelRate, 0)}`, ' class="label halo l-strong" text-anchor="start"'),
+    last === undefined ? "" : svgText(xAt(rows.length - 1) + 4, y.at(last.modelRate) + (last.modelRate < last.searchRate ? 19 : -11), `${last.effort} ${pct(last.modelRate, 0)}`, ' class="label halo l-strong" text-anchor="end"'),
+  ];
 
   return [
-    svgText(frame.panelX, frame.panelTop - 2, "Sonnet 5.5 by effort", ' class="title"'),
-    svgText(frame.panelX, frame.panelTop + 16, "clean shots below even odds", ' class="note"'),
-    ...x.ticks.map((tick) => line(x.at(tick), frame.panelTop + 34, x.at(tick), axisY, ' class="grid"') + svgText(x.at(tick), axisY + 15, pct(tick, 0), ' class="tick" text-anchor="middle"')),
-    ...rows.map((row, index) => {
-      const cy = rowY(index);
-      const isBest = row.effort === best;
-
-      const body = [
-        `<rect class="hit" x="${frame.panelX}" y="${px(cy - frame.rowGap / 2)}" width="${frame.panelWidth}" height="${frame.rowGap}"/>`,
-        svgText(frame.panelX, cy + 4, row.effort, isBest ? ' class="label strong-label"' : ' class="label"'),
-        svgText(frame.panelX + labelWidth - 8, cy + 4, `n ${row.n}`, ' class="tick" text-anchor="end"'),
-        line(x.at(row.searchRate), cy, x.at(row.modelRate), cy, ' class="gapline"'),
-        line(x.at(row.searchRate), cy - 6, x.at(row.searchRate), cy + 6, ' class="d-search-tick"'),
-        `<circle class="d-strong" cx="${px(x.at(row.modelRate))}" cy="${cy}" r="4.5"/>`,
-      ].join("");
-
-      return tipped(effortTip(row), body);
-    }),
+    svgText(panelX, panelTop - 22, "Sonnet 5.5 by effort", ' class="title"'),
+    ...y.ticks.map((tick) => line(panelX + 12, y.at(tick), panelRight, y.at(tick), ' class="grid"') + svgText(panelX + 6, y.at(tick) + 4, pct(tick, 0), ' class="tick" text-anchor="end"')),
+    ...rows.map((row, index) => svgText(xAt(index), panelBottom + 17, row.effort, ' class="tick" text-anchor="middle"')),
+    `<path class="s-search" d="${pathOf(rows.map((row, index) => [xAt(index), y.at(row.searchRate)]))}"/>`,
+    `<path class="s-strong" d="${pathOf(rows.map((row, index) => [xAt(index), y.at(row.modelRate)]))}"/>`,
+    ...ends,
+    ...rows.map((row, index) =>
+      tipped(effortTip(row), [
+        `<rect class="hit" x="${px(xAt(index) - step / 2)}" y="${panelTop}" width="${px(step)}" height="${panelBottom - panelTop}"/>`,
+        `<circle class="d-search" cx="${px(xAt(index))}" cy="${px(y.at(row.searchRate))}" r="3"/>`,
+        `<circle class="d-strong" cx="${px(xAt(index))}" cy="${px(y.at(row.modelRate))}" r="4.5"/>`,
+      ].join(""))),
   ].join("");
 };
 
 const label = (findings: Findings): string =>
-  `Chart. Below even odds, strong models shoot themselves on ${pct(findings.headline.strongModelRate, 0)} of clean shots; the depth-7 search prefers it on ${pct(findings.headline.strongSearchRate, 0)}.`;
+  `Chart. Below 50% live, strong models shoot themselves on ${pct(findings.headline.strongModelRate, 0)} of plain shots; the depth-7 search prefers it on ${pct(findings.headline.strongSearchRate, 0)}.`;
 
 /** Figure 1 in both layouts. */
 export const selfShotFigure = (findings: Findings): string =>
   LAYOUTS.map((layout) => drawing(layout, FRAME[layout].width, FRAME[layout].height, label(findings), mainPanel(findings.curve, layout) + effortPanel(findings.sonnetEffort, layout))).join("");
-

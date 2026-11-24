@@ -57,12 +57,14 @@ export const dataOf = (online: ReadonlyMap<string, string>): ReadonlyMap<string,
     return name === undefined ? [] : [[name, text] as const];
   }));
 
-/** The files in `web/online` besides the data. */
+/** The files in `web/online` besides the data and the fonts. */
 const SITE_FILES: ReadonlySet<string> = new Set(["_headers", "404.html", "og.png"]);
 
-/** What stops `web/online` (its files by path) from being uploaded, empty when nothing: a file that is neither one of the site's own nor data, and the privacy check on the data. */
+const FONT_FILE = /^fonts\/[a-z0-9-]+\.woff$/;
+
+/** What stops `web/online` (its files by path) from being uploaded, empty when nothing: a file that is neither one of the site's own, a font nor data, and the privacy check on the data. */
 export const uploadProblems = (online: ReadonlyMap<string, string>): ReadonlyArray<string> => [
-  ...[...online.keys()].flatMap((path) => (SITE_FILES.has(path) || DATA_FILE.test(path) ? [] : [`${path}: not part of the site`])),
+  ...[...online.keys()].flatMap((path) => (SITE_FILES.has(path) || FONT_FILE.test(path) || DATA_FILE.test(path) ? [] : [`${path}: not part of the site`])),
   ...privacyViolations(dataOf(online)),
 ];
 
