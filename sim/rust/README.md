@@ -2,7 +2,7 @@
 
 A Rust port of the Buckshot rules and of the minimax player. The Bend code in
 `sim/bend-mp/` is the source of truth: Rust is checked against it, and Bend
-wins any disagreement ([ADR-0052](../../docs/adr/0052-rust-evaluator.md)).
+wins any disagreement.
 Production regret scoring runs the Rust search.
 
 ## Crates
@@ -10,9 +10,8 @@ Production regret scoring runs the Rust search.
 - `rules/` (`buckshot-rules`): the simple machine from `sim/bend-mp/simple/`.
   The state is one `Copy` value; a step does not allocate. `seats-2-4` holds
   every table and `seats-2` only the two-seat one.
-- `search/` (`buckshot-search`): the player from `sim/bend-mp/player/`
-  ([ADR-0043](../../docs/adr/0043-minimax-player.md)), as a library and the
-  `buckshot-search` CLI. It has two evaluators:
+- `search/` (`buckshot-search`): the player from `sim/bend-mp/player/`,
+  as a library and the `buckshot-search` CLI. It has two evaluators:
   - `compat` (the `f32` build only) is Bend's search, bit for bit.
   - `bounded-v1` is the box search that production uses, run with
     `--unpruned`. The `f64,seats-2` build writes the regret rows

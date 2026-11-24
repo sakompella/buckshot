@@ -7,7 +7,7 @@ import type { ScoredMove } from "./accuracy.ts";
 import type { SeatRegret } from "./api.ts";
 import { readOnly } from "./read-only.ts";
 
-// The regret table of the derived database that tools/arena builds (docs/arena/methods.md, "Production scoring"), read only. A regret
+// The regret table of the derived database that tools/arena builds, read only. A regret
 // file holds one run (evaluator, depth limit, budget, reload rule, samples); a file with several is refused. Scores are
 // millionths of the round win chance, shown as points.
 

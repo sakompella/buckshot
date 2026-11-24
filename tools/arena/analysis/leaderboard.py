@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The arena leaderboard: one table per cohort.
 
-The rating is the luck-adjusted Round Elo (docs/arena/methods.md, Luck correction and Round Elo), one pooled fit over every scored
+The rating is the luck-adjusted Round Elo, one pooled fit over every scored
 match, so a config has the same rating in every table. Win share, pot share and matches count only the cohort's own matches. Intervals
 are in the matchups tables (matchups.py). Tournament 3 and tournament 4 have no table of their own: their matches are in the first one. With --doc FILE the
 scope line and the tables replace the text between the leaderboard markers of that file.

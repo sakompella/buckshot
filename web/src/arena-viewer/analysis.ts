@@ -13,7 +13,7 @@ import type { Decisions, Pattern, SeatAnalysis, Shell, Story } from "./api.ts";
 
 // Per-decision columns for choice patterns, items, reasoning and compute, worked out once at server start.
 // Each player's view is what it heard up to each of its decisions: the match's replayed events and its own secrets,
-// as the importer stored them (events, secrets and decisions.events_before in docs/arena/database.md).
+// as the importer stored them (events, secrets and decisions.events_before).
 // What a player knew of the gun (the chambered shell, its odds, the saw) comes from the knowledge database, the Bend
 // belief over the player's own log; without one, no chamber pattern or odds is counted.
 

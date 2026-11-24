@@ -46,7 +46,7 @@ export const matchWinVsAnchor = (rating: number): number => {
   return round * round * (3 - 2 * round);
 };
 
-/** The standard deviation of the Gaussian prior on a strength, in nats: about 520 Elo, so it only keeps ratings finite and joined (docs/arena/methods.md, "Round Elo"). */
+/** The standard deviation of the Gaussian prior on a strength, in nats: about 520 Elo, so it only keeps ratings finite and joined. */
 const PRIOR_SD = 3;
 
 const MAX_STEPS = 50;

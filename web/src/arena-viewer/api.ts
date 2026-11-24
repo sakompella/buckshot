@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 // The arena viewer's JSON API: what its server encodes and its page decodes.
-// The server reads the analysis database (docs/arena/database.md) read-only.
+// The server reads the analysis database read-only.
 
 const Count = Schema.NullOr(Schema.Finite);
 

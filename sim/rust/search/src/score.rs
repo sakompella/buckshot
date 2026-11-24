@@ -1,4 +1,4 @@
-//! `buckshot-search score`: the production regret rows (docs/arena/methods.md, Production scoring).
+//! `buckshot-search score`: the production regret rows.
 //!
 //! Reads the rows `web/scripts/rust-search-inputs.ts` writes (each decision's position with Bend's menu, Bend's move
 //! codes and the agent's move), searches each decision the regret database has no row for under this run's evaluator

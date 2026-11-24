@@ -1,6 +1,5 @@
 // Move and game accuracy as lichess computes them (lila AccuracyPercent.scala, Advice.scala, scalalib Maths.scala), on our
 // scale: a "win percent" is a score in points of the round win chance (0-100), and a move's drop is its regret.
-// Adaptations are listed in docs/arena/methods.md, "Accuracy and move quality (regret)".
 
 /** A move that gave up at least this many points of the round win chance is an inaccuracy, a mistake or a blunder. Lichess's 0.1, 0.2 and 0.3 are on its winning chances, [-1, 1], so they are 5, 10 and 15 win percents. */
 export const INACCURACY_POINTS = 5;

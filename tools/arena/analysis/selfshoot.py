@@ -527,7 +527,9 @@ def main() -> None:
     parser.add_argument("--db", default=DB)
     parser.add_argument("--regret", type=Path, default=regret.PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--out", type=Path, default=REPO / "web/online/data/findings.json")
+    parser.add_argument(
+        "--out", type=Path, default=REPO / "web/online/data/findings.json"
+    )
     args = parser.parse_args()
     require_current(args.db)
     findings = build(args.db, args.regret, args.knowledge)

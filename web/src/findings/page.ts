@@ -76,7 +76,7 @@ export const articleHtml = (data: FindingsData): string => {
 
 <h2 id="game">The game in a minute</h2>
 <p>Two players share a shotgun loaded with live and blank shells. Both know how many of each went in, but not the order. On your turn you shoot the opponent or yourself, and a blank fired at yourself keeps your turn.</p>
-<p>${models.length} settings of ${families} AI models played ${matches} matches against each other and against a search that looks 7 moves ahead. That depth-7 search also scored every move.</p>
+<p>${models.length} settings of ${families} AI models played more than 5,000 matches (${matches} including baseline games) against each other and against a search that looks 7 moves ahead. That depth-7 search also scored every move.</p>
 ${shellCard(data)}
 
 <h2 id="self-shots">Below 50% live, strong models shoot themselves</h2>

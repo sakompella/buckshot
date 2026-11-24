@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The production regret run: score agent decisions with the Rust evaluator (sim/rust, ADR-0052) into the `regret` table.
+"""The production regret run: score agent decisions with the Rust evaluator (sim/rust) into the `regret` table.
 
     python3 tools/arena/score_regret.py --db buckshot.sqlite --sampled-out derived/regret-rust-<hex>-sampled256.sqlite
 
@@ -20,7 +20,7 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
 
 The evaluator id is `bounded-v1-f64-unpruned`: the CLI's declared algorithm version (BoundedV1::ID) and `-unpruned`.
 A refactor keeps it; sim/rust/search/tests/golden pins it to production rows that must reproduce bit for bit, and a
-change meant to move a value bumps the version (ADR-0052). `evaluator_build` records each run's source commit, a hash
+change meant to move a value bumps the version. `evaluator_build` records each run's source commit, a hash
 of the Rust sources, Cargo files and features, the features, binary hash, decision count and wall time. Rows carry no
 per-decision time (`ms` is null).
 """
@@ -56,7 +56,7 @@ CREATE_BUILD = """CREATE TABLE IF NOT EXISTS evaluator_build (
     source_commit TEXT, features TEXT, binary_sha256 TEXT, decisions INTEGER, seconds REAL, threads INTEGER, finished TEXT, sources_sha256 TEXT)"""
 
 
-# The run's peak memory: SEARCH_BASE_BYTES + threads * budget * SEARCH_BYTES_PER_NODE (docs/arena/README.md, "Heavy jobs").
+# The run's peak memory: SEARCH_BASE_BYTES + threads * budget * SEARCH_BYTES_PER_NODE.
 # Measured 2026-11-14 on 3 threads: the input writers and Python peaked at 0.8 GB resident (depth 6, 200k, 200 decisions).
 # Measured 2026-11-16 with the smaller memo keys (perf/search-speed): buckshot-search at depth 7 and 50M nodes peaked at
 # 225 and 353 MB on two hosts, one thread, over limited decisions, and at 1.0 GB over 6 threads on 2,660 mixed decisions,

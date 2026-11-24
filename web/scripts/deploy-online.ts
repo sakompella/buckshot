@@ -9,7 +9,7 @@ import { aliasOf, allTraffic, dataOf, previewUrl, siteProblems, uploadProblems, 
 import { WORKER } from "../src/deploy/worker.ts";
 import { runMainWith, ScriptError } from "../src/script.ts";
 
-// Deploys the online site in two steps (ADR-0050). Before any upload, `check` refuses a file in web/online that is not
+// Deploys the online site in two steps. Before any upload, `check` refuses a file in web/online that is not
 // part of the site and runs the privacy check on the data; `preview` runs it first, and `deploy:online` before its `cf deploy`. `preview` uploads a Worker version without sending it traffic,
 // serves it at https://<alias>-buckshot.<workers.dev subdomain>.workers.dev and checks it there. `promote` sends all
 // traffic, so $ONLINE_DOMAIN, to a version. Needs CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and ONLINE_DOMAIN in the

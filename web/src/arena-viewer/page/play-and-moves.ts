@@ -7,9 +7,8 @@ import type { Fitted, Rating } from "./ratings.ts";
 // lost per move predict. Across the configs the headline rating lies close to a line in points lost per move, and a
 // config's own distance from the line has a spread of its own, fitted with the line by maximum likelihood. Each config
 // then weighs its two ratings by their precision, so one with few matches leans on its move scores and one with many on
-// its results. A 30-fold split-half test found it closer to the other half's rating than the results alone
-// (docs/arena/methods.md, "Round Elo"). A config with fewer than MOVES_BELOW matches also takes it as its headline rating
-// (ADR-0060).
+// its results. A 30-fold split-half test found it closer to the other half's rating than the results alone.
+// A config with fewer than MOVES_BELOW matches also takes it as its headline rating.
 
 /** Below this many scored two-player matches, a config with scored moves has its Elo from play and move quality as its headline rating. */
 export const MOVES_BELOW = 100;

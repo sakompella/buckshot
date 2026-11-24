@@ -28,7 +28,7 @@ terms. The chance events:
 Every V is fitted out of fold, five folds by seed, so no round is corrected by a model that saw it. The output database holds
 per match and player the sum of that player's corrections over the match's rounds; the viewer adds it to the player's round wins
 before the Round Elo fit (web/src/arena-viewer/page/ratings.ts). With --doc FILE the method's tables replace the text between the
-luck markers of that file (method: docs/arena/methods.md, Luck correction).
+luck markers of that file.
 
     python3 tools/arena/analysis/aivat.py [--db PATH] [--knowledge PATH] [--regret PATH] [--out derived/luck.sqlite] [--doc FILE]
 """

@@ -11,7 +11,7 @@ import type { Game } from "../bend.ts";
 import { GameEvent, Item, Move, Seat, Secret } from "../domain.ts";
 import type { GameEvent as Event, LearnedSecret, SeatCount } from "../domain.ts";
 
-// The minimax player (sim/bend-mp/player/, ADR-0043) for the analysis scripts,
+// The minimax player (sim/bend-mp/player/) for the analysis scripts,
 // through its export table sim/bend-mp/analysis.bend. Constructors are bare in
 // both Bend builds, so the board and config the rules build returns pass into
 // it unchanged. This module only marshals: a player's own log
@@ -254,7 +254,6 @@ export interface Limits {
 /**
  * How the search values a reload it stops at: the static evaluation before the draw, that evaluation averaged over every distinct deal
  * of the reload, or its mean over `samples` deals drawn at random (both two seats only; at three or four the analysis is invalid).
- * See "Accuracy and move quality (regret)" in docs/arena/methods.md.
  */
 export const RELOAD_RULES = ["static", "expected-deal", "sampled"] as const;
 

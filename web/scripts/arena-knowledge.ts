@@ -21,7 +21,7 @@ import { replayOf } from "../src/arena/replay.ts";
 import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 
 // Rebuilds every agent decision's own information from the analysis database
-// (docs/arena/database.md) and writes it to a separate database: the shell
+// and writes it to a separate database: the shell
 // belief and where a certain chamber came from, the items on the table, each
 // item's fate, deaths and position keys. The analysis database is opened read
 // only. scripts/arena-knowledge-report.ts tabulates it.
