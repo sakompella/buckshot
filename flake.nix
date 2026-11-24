@@ -113,7 +113,7 @@
         in {
           default = pkgs.mkShell ({
             packages = [ bend pkgs.bun pkgs.nodejs_22 (devEnv pkgs) pkgs.uv
-              toolchain pkgs.rust-analyzer pkgs.cargo-mutants pkgs.pre-commit ];
+              toolchain pkgs.rust-analyzer pkgs.cargo-mutants pkgs.pre-commit pkgs.resvg ];
             BEND = "${bend}/bin/bend";
             BENDTT = "${bendtt}/bin/bendtt";
             # The dev env already has everything in dev/uv.lock.

@@ -3,9 +3,9 @@ import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
 import { AGGREGATE_NAMES } from "../src/arena-viewer/aggregates.ts";
-import { aliasOf, allTraffic, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
+import { aliasOf, allTraffic, PAGES, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
 import { WORKER } from "../src/deploy/worker.ts";
-import { PAGE_PATHS } from "../src/site/route.ts";
+import { FINDINGS_JSON } from "./fixtures.ts";
 
 test("an alias is a DNS-safe label that fits beside the worker name, or nothing", () => {
   hegel.test((tc) => {
@@ -37,35 +37,54 @@ const LOCAL = new Map([...AGGREGATE_NAMES, "manifest"].map((name) => [name, `{"$
 
 const site = (overrides: Readonly<Record<string, Response>>) => async (url: string) => {
   const path = new URL(url).pathname;
-  const shell = new Response('<div id="root"></div>', { status: PAGE_PATHS.includes(path) ? 200 : 404, headers: { "content-type": "text/html" } });
+  const page = path === "/" ? new Response("<article></article>", { headers: { "content-type": "text/html" } }) : new Response("<h1>Nothing lives here</h1>", { status: 404, headers: { "content-type": "text/html" } });
   const data = LOCAL.get(path.replaceAll(/^\/data\/|\.json$/g, ""));
 
-  return Promise.resolve(overrides[path] ?? (data === undefined ? shell : new Response(data, { headers: { "content-type": "application/json" } })));
+  return Promise.resolve(overrides[path] ?? (data === undefined ? page : new Response(data, { headers: { "content-type": "application/json" } })));
 };
 
-test("a preview that serves the exported data raises no difference or page problem", async () => {
-  const problems = await siteProblems(site({}), "https://p.example", LOCAL);
-
-  expect(problems.filter((problem) => /differs|status|app shell/.test(problem))).toEqual([]);
+test("the post answers at / and the arena viewer's old path and any other path answer 404", () => {
+  expect(PAGES).toEqual([["/", 200], ["/arena", 404], ["/no-such-page", 404]]);
 });
 
-test("a missing page, a data file that differs and a file that is not JSON are reported", async () => {
+test("a preview that serves the post and the exported data raises no difference or page problem", async () => {
+  const problems = await siteProblems(site({}), "https://p.example", LOCAL);
+
+  expect(problems.filter((problem) => /differs|status|article/.test(problem))).toEqual([]);
+});
+
+test("a page without the post, an arena still served, a data file that differs and a file that is not JSON are reported", async () => {
   const problems = await siteProblems(
-    site({ "/arena": new Response("", { status: 404 }), "/data/odds.json": new Response("{}", { headers: { "content-type": "application/json" } }), "/data/items.json": new Response("<html>", { headers: { "content-type": "text/html" } }) }),
+    site({
+      "/": new Response('<div id="root"></div>', { headers: { "content-type": "text/html" } }),
+      "/arena": new Response("<article></article>", { headers: { "content-type": "text/html" } }),
+      "/data/odds.json": new Response("{}", { headers: { "content-type": "application/json" } }),
+      "/data/items.json": new Response("<html>", { headers: { "content-type": "text/html" } }),
+    }),
     "https://p.example",
     LOCAL,
   );
 
-  expect(problems).toContain("/arena: status 404");
+  expect(problems).toContain("/: no article");
+  expect(problems).toContain("/arena: status 200");
   expect(problems).toContain("/data/odds.json: differs from the exported file");
   expect(problems.some((problem) => problem.startsWith("/data/items.json: status 200, text/html"))).toBe(true);
 });
 
 test("a file in web/online beside the site's own is refused before an upload", () => {
-  const online = new Map([["_headers", ""], ...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/private-debug.json", "{}"], ["notes.txt", ""]]);
+  const online = new Map([["_headers", ""], ["404.html", ""], ["og.png", ""], ...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/private-debug.json", "{}"], ["notes.txt", ""]]);
 
   const problems = uploadProblems(online);
 
   expect(problems).toContain("notes.txt: not part of the site");
   expect(problems).toContain("private-debug: not an export file");
+  expect(problems.filter((problem) => /^(_headers|404\.html|og\.png):/.test(problem))).toEqual([]);
+});
+
+const withFindings = (findings: string) => uploadProblems(new Map([...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/findings.json", findings]]));
+
+test("the findings file is uploaded only when it passes its strict decode", () => {
+  expect(withFindings("{}").some((problem) => problem.startsWith("findings:"))).toBe(true);
+  expect(withFindings("{}").some((problem) => problem.includes("not an export file"))).toBe(false);
+  expect(withFindings(JSON.stringify(FINDINGS_JSON)).filter((problem) => problem.startsWith("findings:"))).toEqual([]);
 });

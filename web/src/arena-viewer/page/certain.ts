@@ -3,7 +3,8 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES } from "../api.ts";
 import type { CertainMistakes, CertainRate, CertainType, OpportunityType } from "../api.ts";
-import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
+import { linScale } from "../../charts/scales.ts";
+import { anchorId, chartWidth, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtShare, fmtTime, groupBy, keyOf, labelOf, shortName, sumOf } from "./data.ts";
 import type { MatchRow, SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";

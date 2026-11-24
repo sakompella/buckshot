@@ -36,6 +36,7 @@
     "test:lint-rules": "node --experimental-strip-types --test 'tools/oxlint/anti-slop/**/*.test.ts'",
     "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
     "dev:online": "bun run rules && cf dev --mode online",
+    "og-image": "bun scripts/og-image.ts",
     "build:online": "bun run rules && cf build --mode online",
     "deploy:online": "bun run rules && bun scripts/deploy-online.ts check && cf deploy --mode online",
     "deploy:preview": "bun run rules && bun scripts/deploy-online.ts preview",

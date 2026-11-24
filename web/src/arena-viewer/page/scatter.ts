@@ -1,7 +1,10 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
+import { paretoFrontier } from "../../charts/frontier.ts";
+import { linScale, logScale } from "../../charts/scales.ts";
+import { cellPath, TAP_REACH, tapCells } from "../../charts/tap-cells.ts";
+import { anchorId, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
 import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isFixedPlayer, isProvisional, reasoningPerMove } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
@@ -27,48 +30,6 @@ interface Axis {
   readonly tick: (value: number) => string;
   readonly perMatch: (value: number) => string;
 }
-
-interface Spot {
-  readonly x: number;
-  readonly y: number;
-}
-
-/** How far from a point a tap or the mouse still picks it: a fingertip's width. */
-export const TAP_REACH = 22;
-
-const CELL_SIDES = 24;
-
-/** The part of the convex polygon `cell` nearer `own` than `other`: one Sutherland–Hodgman pass over their bisector. */
-const nearerHalf = (cell: ReadonlyArray<Spot>, own: Spot, other: Spot): ReadonlyArray<Spot> => {
-  const [dx, dy] = [other.x - own.x, other.y - own.y];
-  const [mx, my] = [(own.x + other.x) / 2, (own.y + other.y) / 2];
-  const side = ({ x, y }: Spot) => (x - mx) * dx + (y - my) * dy;
-
-  return cell.flatMap((from, index) => {
-    const to = cell[(index + 1) % cell.length] ?? from;
-    const [a, b] = [side(from), side(to)];
-    const kept = a <= 0 ? [from] : [];
-
-    if ((a <= 0) === (b <= 0)) { return kept; }
-
-    const t = a / (a - b);
-
-    return [...kept, { x: from.x + t * (to.x - from.x), y: from.y + t * (to.y - from.y) }];
-  });
-};
-
-/**
- * Each point's tap area: the places within `reach` of it that are nearer it than any other point, as a polygon. The
- * cells never overlap, so a tap among crowded points picks the nearest one, not the one drawn last.
- */
-export const tapCells = (points: ReadonlyArray<Spot>, reach: number): ReadonlyArray<ReadonlyArray<Spot>> =>
-  points.map((own, index) => {
-    const around: ReadonlyArray<Spot> = Array.from({ length: CELL_SIDES }, (_, step) => ({ x: own.x + reach * Math.cos((2 * Math.PI * step) / CELL_SIDES), y: own.y + reach * Math.sin((2 * Math.PI * step) / CELL_SIDES) }));
-
-    return points.reduce((cell, other, at) => (at === index || (other.x === own.x && other.y === own.y) ? cell : nearerHalf(cell, own, other)), around);
-  });
-
-const cellPath = (cell: ReadonlyArray<Spot>): string => (cell.length < 3 ? "" : `M${cell.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}Z`);
 
 const positive = (value: number): number | null => (value > 0 ? value : null);
 
@@ -134,13 +95,7 @@ interface Point {
   readonly rank: number | undefined;
 }
 
-const dominates = (other: Point, point: Point) => other.x <= point.x && other.rating >= point.rating && (other.x < point.x || other.rating > point.rating);
-
-export const frontierOf = (points: ReadonlyArray<Point>) => {
-  const ranked = points.filter(({ m }) => !isProvisional(m));
-
-  return ranked.filter((point) => !ranked.some((other) => other !== point && dominates(other, point))).toSorted((left, right) => left.x - right.x);
-};
+export const frontierOf = (points: ReadonlyArray<Point>): ReadonlyArray<Point> => paretoFrontier(points.filter(({ m }) => !isProvisional(m)));
 
 /** The nearest 1-2-5 step strictly past a value. */
 const stepPast = (value: number, direction: "down" | "up"): number => {

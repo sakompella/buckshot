@@ -1,9 +1,8 @@
 import { privacyViolations } from "../arena-viewer/privacy.ts";
-import { PAGE_PATHS } from "../site/route.ts";
 import { WORKER } from "./worker.ts";
 
-// The checks a Worker version passes at its preview URL before it takes the live domain (ADR-0050). Pure over a
-// `fetch`, so they run against the preview, the live site, or a stub.
+// The checks a Worker version passes at its preview URL before it takes the live domain. Pure over a `fetch`, so they
+// run against the preview, the live site, or a stub.
 
 const ALIAS_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -25,8 +24,15 @@ export const versionIdOf = (output: string): string | undefined => /Worker Versi
 /** The `--versions` value that sends all traffic to one version. */
 export const allTraffic = (versionId: string): string => JSON.stringify([{ version_id: versionId, percentage: 100 }]);
 
-/** A path the site has no page at, which must answer 404 with the app shell. */
-const MISSING_PAGE = "/no-such-page";
+/** Each path checked and the status it must answer: the findings post at /, and 404 for the arena viewer's old path and for a path nothing ever lived at. */
+export const PAGES: ReadonlyArray<readonly [string, number]> = [
+  ["/", 200],
+  ["/arena", 404],
+  ["/no-such-page", 404],
+];
+
+/** What the post's page holds and a 404 page does not. */
+const POST_MARK = "<article";
 
 type Fetch = (url: string) => Promise<Response>;
 
@@ -38,7 +44,7 @@ const pageProblem = async (fetcher: Fetch, base: string, path: string, status: n
 
   if (response.status !== status) { return `status ${response.status}`; }
 
-  return text.includes('<div id="root"') ? undefined : "no app shell";
+  return status === 200 && !text.includes(POST_MARK) ? "no article" : undefined;
 };
 
 const DATA_FILE = /^data\/([^/]+)\.json$/;
@@ -51,15 +57,18 @@ export const dataOf = (online: ReadonlyMap<string, string>): ReadonlyMap<string,
     return name === undefined ? [] : [[name, text] as const];
   }));
 
-/** What stops `web/online` (its files by path) from being uploaded, empty when nothing: a file that is neither `_headers` nor export data, and the privacy check on the data. */
+/** The files in `web/online` besides the data. */
+const SITE_FILES: ReadonlySet<string> = new Set(["_headers", "404.html", "og.png"]);
+
+/** What stops `web/online` (its files by path) from being uploaded, empty when nothing: a file that is neither one of the site's own nor data, and the privacy check on the data. */
 export const uploadProblems = (online: ReadonlyMap<string, string>): ReadonlyArray<string> => [
-  ...[...online.keys()].flatMap((path) => (path === "_headers" || DATA_FILE.test(path) ? [] : [`${path}: not part of the site`])),
+  ...[...online.keys()].flatMap((path) => (SITE_FILES.has(path) || DATA_FILE.test(path) ? [] : [`${path}: not part of the site`])),
   ...privacyViolations(dataOf(online)),
 ];
 
 /** What is wrong with the site at `base`, empty when it may go live. It must serve every file in `local` byte for byte, and they must pass the privacy check. */
 export const siteProblems = async (fetcher: Fetch, base: string, local: ReadonlyMap<string, string>): Promise<ReadonlyArray<string>> => {
-  const pages = await Promise.all([...PAGE_PATHS.map((path) => [path, 200] as const), [MISSING_PAGE, 404] as const].map(async ([path, status]) => lines(path, await pageProblem(fetcher, base, path, status))));
+  const pages = await Promise.all(PAGES.map(async ([path, status]) => lines(path, await pageProblem(fetcher, base, path, status))));
   const served = new Map<string, string>();
 
   const data = await Promise.all(

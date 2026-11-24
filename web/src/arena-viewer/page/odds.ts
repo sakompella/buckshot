@@ -2,7 +2,8 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { ODDS_BINS } from "../aggregates.ts";
 import type { ConfigOdds, ShotTally } from "../aggregates.ts";
-import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
+import { linScale } from "../../charts/scales.ts";
+import { anchorId, chartWidth, lineKeyView, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, byEffort, colorOf, dashOf, effortLabel, groupBy, labelOf, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";

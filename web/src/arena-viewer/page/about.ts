@@ -88,7 +88,7 @@ export const howView = (h: H): Html =>
         "The gun holds two live shells and one blank, and your magnifying glass showed that the chambered shell is the blank. Shooting yourself costs nothing: the blank keeps your turn, and the next shell is then sure to be live, so you can fire it at your opponent. Shooting the opponent instead passes the turn and hands over the gun. The How they play section counts moves like that as certain mistakes.",
       ]),
       h.p([h.Class("sub")], [
-        "Each player here is a language model, apart from the fixed players: the search engines and the game's dealer AIs. On its turn a model receives its view as JSON: both players' health (hidden while a player is jammed) and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves. It answers with one move number. Each log entry is sent only once, so the model must remember the earlier ones. It sees the public log and its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting. The effort (none to max) is how much thinking the provider allows per move, and more effort costs more. The chips at the top turn models and efforts off and on.",
+        "Each player here is a language model, apart from the fixed players: the search engines and two fixed computer players, the dealer AIs. On its turn a model receives its view as JSON: both players' health (hidden while a player is jammed) and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves. It answers with one move number. Each log entry is sent only once, so the model must remember the earlier ones. It sees the public log and its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting. The effort (none to max) is how much thinking the provider allows per move, and more effort costs more. The chips at the top turn models and efforts off and on.",
       ]),
     ],
   );
@@ -115,7 +115,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Search engines and dealer AIs. "]),
-        "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines. The Story and Double or Nothing dealer AIs, the game's own computer players, are drawn the same way: they call no model and cost nothing.",
+        "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines. The Story and Double or Nothing dealer AIs, two fixed computer players, are drawn the same way: they call no model and cost nothing.",
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),

@@ -2,6 +2,7 @@ import { Result, Schema } from "effect";
 
 import { AGGREGATE_NAMES, AGGREGATES, Summary } from "./aggregates.ts";
 import type { AggregateName } from "./aggregates.ts";
+import { Findings } from "../findings/data.ts";
 import { ITEMS, OpportunityType } from "./api.ts";
 
 // The last gate before the aggregate files leave this machine: they must hold per-config and per-pair numbers only,
@@ -84,15 +85,36 @@ const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<strin
   return [...undecodable, ...strings];
 };
 
-/** What is wrong with a set of export files, by file name; empty when they may be published. */
+/** The findings page's own file, written by tools/arena/analysis/selfshoot.py rather than the export. */
+const FINDINGS = "findings";
+
+/**
+ * The findings file decodes strictly, so its keys are exactly its schema's (one of them names the seed's share of
+ * variance, which the key check would refuse), and its strings are its schema's literals, checked for ids and emails.
+ */
+const findingsViolations = (json: string): ReadonlyArray<string> => {
+  const decoded = Schema.decodeResult(Schema.fromJsonString(Findings))(json, STRICT);
+  const undecodable = Result.isFailure(decoded) ? [`${FINDINGS}: ${decoded.failure.message}`] : [];
+
+  const suspect = stringsOf(json).flatMap(({ text }) => SUSPECT.flatMap(([pattern, why]) => (pattern.test(text) ? [`${FINDINGS}: ${JSON.stringify(text.slice(0, 40))} ${why}`] : [])));
+
+  return [...undecodable, ...suspect];
+};
+
+/** What is wrong with a set of export files, by file name; empty when they may be published. The findings file is checked when present. */
 export const privacyViolations = (files: ReadonlyMap<string, string>): ReadonlyArray<string> => {
   const allowed = allowedStrings(files);
   const sourceIds = sourceIdsOf(files);
-  const unknown = [...files.keys()].flatMap((name) => (FILE_NAMES.some((known) => known === name) ? [] : [`${name}: not an export file`]));
+  const unknown = [...files.keys()].flatMap((name) => (name === FINDINGS || FILE_NAMES.some((known) => known === name) ? [] : [`${name}: not an export file`]));
+  const findings = files.get(FINDINGS);
 
-  return [...unknown, ...FILE_NAMES.flatMap((name) => {
-    const json = files.get(name);
+  return [
+    ...unknown,
+    ...FILE_NAMES.flatMap((name) => {
+      const json = files.get(name);
 
-    return json === undefined ? [`${name}: missing`] : fileViolations(name, json, allowed, sourceIds);
-  })];
+      return json === undefined ? [`${name}: missing`] : fileViolations(name, json, allowed, sourceIds);
+    }),
+    ...(findings === undefined ? [] : findingsViolations(findings)),
+  ];
 };

@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
-import { TAP_REACH, tapCells } from "../src/arena-viewer/page/scatter.ts";
+import { TAP_REACH, tapCells } from "../src/charts/tap-cells.ts";
 
 interface Point {
   readonly x: number;

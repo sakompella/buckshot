@@ -94,6 +94,8 @@ export type SeedBlocks = typeof SeedBlocks.Type;
 
 export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean, runs: Schema.optional(Runs), seedBlocks: SeedBlocks });
 
+export type Summary = typeof Summary.Type;
+
 /** The two-player matches between two configs, `first` at the table's first position. Wins are win shares summed over scored matches. */
 export const Pair = Schema.Struct({
   first: Schema.String,
