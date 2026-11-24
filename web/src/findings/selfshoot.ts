@@ -91,7 +91,7 @@ const mainPanel = (curve: ReadonlyArray<CurvePoint>, layout: Layout): string => 
     ...y.ticks.map((tick) => line(frame.left, y.at(tick), frame.right, y.at(tick), ' class="grid"') + svgText(frame.left - 6, y.at(tick) + 4, pct(tick, 0), ' class="tick" text-anchor="end"')),
     ...pValues.map(([p, label]) => line(x.at(p), frame.bottom, x.at(p), frame.bottom + 4, ' class="axis"') + svgText(x.at(p), frame.bottom + 17, label, ' class="tick" text-anchor="middle"')),
     line(half, frame.top - 4, half, frame.bottom, ' class="rule"'),
-    svgText(half, frame.top - 9, "even odds", ' class="note" text-anchor="middle"'),
+    svgText(half + 6, frame.top - 9, "even odds", ' class="note" text-anchor="start"'),
     svgText(frame.left, frame.top - 22, "% of clean shots aimed at self", ' class="title"'),
     svgText((frame.left + frame.right) / 2, frame.bottom + 36, layout === "wide" ? "Chance the chambered shell is live, P(live)" : "P(live) of the chambered shell", ' class="axis-title" text-anchor="middle"'),
     ...whiskers,

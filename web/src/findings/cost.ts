@@ -100,8 +100,7 @@ const costDrawing = (configs: ReadonlyArray<Config>, layout: Layout): string => 
   });
 
   const range = topTierRange(configs);
-  const bestOfTier2 = priced.find(({ tier }) => tier === 2);
-  const named = isWide ? priced.filter((config) => isTopTier(config) || config === bestOfTier2) : (range ?? []);
+  const named = isWide ? priced.filter(isTopTier) : (range ?? []);
   const labels = placeLabels(named.map((config) => ({ x: x.at(config.cost), y: y.at(config.rating), text: `${config.short} ${usd(config.cost)}` })), frame.right, frame.charWidth);
 
   const bracket = range === undefined ? [] : (() => {
